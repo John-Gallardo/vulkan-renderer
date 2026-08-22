@@ -2,6 +2,7 @@
 #include "Config.h"
 #include "Window/Window.h"
 #include "volk.h"
+#include "vk_mem_alloc.h"
 #include <ranges>
 #include <utility>
 #include <stdexcept>
@@ -131,6 +132,37 @@ void Renderer::createDevice() {
 
     checkResult(vkCreateDevice(m_physicalDevice, &deviceCreateInfo, nullptr, &m_device), "Error: failed to create a Vulkan logical device");
     vkGetDeviceQueue(m_device, graphicsQueueFamilyIndex, 0, &m_queue);
+    volkLoadDevice(m_device);
+}
+
+void Renderer::createAllocator() {
+    VmaAllocatorCreateInfo allocatorCreateInfo{
+        .flags                          = {},
+        .physicalDevice                 = m_physicalDevice,
+        .device                         = m_device,
+        .preferredLargeHeapBlockSize    = {},       // default = 256MB
+        .pAllocationCallbacks           = nullptr,
+        .pDeviceMemoryCallbacks         = nullptr,
+        .pHeapSizeLimit                 = nullptr,
+        .pVulkanFunctions               = {},
+        .instance                       = m_instance,
+        .vulkanApiVersion               = VK_API_VERSION_1_4,
+        .pTypeExternalMemoryHandleTypes = nullptr
+    };
+
+    VmaVulkanFunctions vulkanFunctions{};
+    checkResult(vmaImportVulkanFunctionsFromVolk(&allocatorCreateInfo, &vulkanFunctions), "Error: failed to import vulkan functions for VMA from Volk");
+    allocatorCreateInfo.pVulkanFunctions = &vulkanFunctions;
+
+    checkResult(vmaCreateAllocator(&allocatorCreateInfo, &m_allocator), "Error: Failed to create VMA Allocator");
+
+}
+
+void Renderer::createSwapchain() {
+    VkSwapchainCreateInfoKHR swapchainCreateInfo{
+    };
+
+    //vkCreateSwapchainKHR(m_device, &swapchainCreateInfo)
 }
 
 void Renderer::checkResult(VkResult result, std::string_view errorMessage) const {
@@ -140,5 +172,6 @@ void Renderer::checkResult(VkResult result, std::string_view errorMessage) const
 }
 
 void Renderer::cleanup() {
-    // TODO: need to clean up literally everything
+    vkDestroyDevice(m_device, nullptr);
+    vkDestroyInstance(m_instance, nullptr);
 }

@@ -6,6 +6,7 @@ void App::run() {
     m_window.initWindow();
     m_renderer.initVulkan(m_window);
     mainLoop();
+    cleanup();
 }
 
 void App::mainLoop() {
@@ -17,4 +18,5 @@ void App::mainLoop() {
 
 void App::cleanup() {
     m_window.cleanup();
+    m_renderer.cleanup();
 }
