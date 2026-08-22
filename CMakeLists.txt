@@ -8,6 +8,7 @@ endif()
 
 # packages & programs
 find_package(glfw3 3.3 REQUIRED)
+find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 find_program(IWYU_PATH NAMES include-what-you-use iwyu)
 if (NOT IWYU_PATH)
     message(FATAL_ERROR "Could not find include-what-you-use")
@@ -23,6 +24,7 @@ set(SOURCE
 
 set(LIBS
     libs/volk.c
+    libs/vmaImplementation.cpp
 )
 
 add_executable(${PROJECT_NAME} ${SOURCE} ${LIBS})
@@ -36,11 +38,14 @@ target_include_directories(${PROJECT_NAME} PRIVATE libs)
 # defines
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     GLFW_INCLUDE_VULKAN
+    VMA_STATIC_VULKAN_FUNCTIONS=0
+    VMA_DYNAMIC_VULKAN_FUNCTIONS=0
 )
 
 # link libraries
-target_link_libraries(${PROJECT_NAME}
+target_link_libraries(${PROJECT_NAME} PRIVATE
     glfw
+    GPUOpen::VulkanMemoryAllocator
 )
 
 # use programs
