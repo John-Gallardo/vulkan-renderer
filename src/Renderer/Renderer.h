@@ -1,7 +1,6 @@
 #pragma once
 #include "volk.h"
 #include "vk_mem_alloc.h"
-#include <string>
 #include <vector>
 class Window;
 
@@ -17,6 +16,8 @@ private:
     VmaAllocator              m_allocator               {VK_NULL_HANDLE};
     VkSurfaceKHR              m_surface                 {VK_NULL_HANDLE};
     VkSwapchainKHR            m_swapchain               {VK_NULL_HANDLE};
+    std::vector<VkImage>      m_swapchainImages         {};
+    std::vector<VkImageView>  m_swapchainImageViews     {};
     std::vector<const char *> m_requiredDeviceExtensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
     void createInstance(Window &window);
@@ -25,5 +26,7 @@ private:
     void createAllocator();
     void createSurface(Window &window);
     void createSwapchain(Window &window);
-    void checkResult(VkResult result, std::string errorMessage) const;
+    void createImageViews();
+    void checkResult(VkResult result, const char *errorMessage) const;
+    void swapchainCleanup();
 };

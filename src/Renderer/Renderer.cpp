@@ -8,7 +8,6 @@
 #include <stdexcept>
 #include <algorithm>
 #include <limits>
-#include <string>
 #include <cstdint>
 #include <vector>
 #include <queue>
@@ -212,18 +211,53 @@ void Renderer::createSwapchain(Window &window) {
     };
 
     checkResult(vkCreateSwapchainKHR(m_device, &swapchainCreateInfo, nullptr, &m_swapchain), "Error: failed to create Vulkan Swapchain");
+    uint32_t imageCount{};
+    checkResult(vkGetSwapchainImagesKHR(m_device, m_swapchain, &imageCount, nullptr), "Error: failed to grab Vulkan Swapchain image count");
+    checkResult(vkGetSwapchainImagesKHR(m_device, m_swapchain, &imageCount, m_swapchainImages.data()), "Error: failed to fill Vulkan swapchain image array");
 }
 
-void Renderer::checkResult(VkResult result, std::string errorMessage) const {
+void Renderer::createImageViews() {
+    VkImageViewCreateInfo imageViewCreateInfo{
+        .sType      = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .pNext      = nullptr,
+        .flags      = {},
+        .image      = VK_NULL_HANDLE,
+        .viewType   = VK_IMAGE_VIEW_TYPE_2D,
+        .format     = VK_FORMAT_B8G8R8A8_SRGB,
+        .components = {},  // no swizzling
+        .subresourceRange = {
+            .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel   = 0,
+            .levelCount     = 1,
+            .baseArrayLayer = 0,
+            .layerCount     = 1
+        }
+    };
+
+    for (auto [i, image] : std::views::enumerate(m_swapchainImages)) {
+        imageViewCreateInfo.image = image;
+        checkResult(vkCreateImageView(m_device, &imageViewCreateInfo, nullptr, &m_swapchainImageViews[i]), "Error: failed to create Vulkan swapchain image view");
+    }
+}
+
+void Renderer::checkResult(VkResult result, const char *errorMessage) const {
     if (result != VK_SUCCESS) {
         throw std::runtime_error(errorMessage);
     }
 }
 
 void Renderer::cleanup() {
-    vkDestroySwapchainKHR(m_device, m_swapchain, nullptr);
+    vkDeviceWaitIdle(m_device);
+    swapchainCleanup();
     vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
     vmaDestroyAllocator(m_allocator);
     vkDestroyDevice(m_device, nullptr);
     vkDestroyInstance(m_instance, nullptr);
+}
+
+void Renderer::swapchainCleanup() {
+    for (VkImageView imageView : m_swapchainImageViews) {
+        vkDestroyImageView(m_device, imageView, nullptr);
+    }
+    vkDestroySwapchainKHR(m_device, m_swapchain, nullptr);
 }
