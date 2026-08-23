@@ -6,7 +6,8 @@
 #include <ranges>
 #include <utility>
 #include <stdexcept>
-#include <string_view>
+#include <algorithm>
+#include <limits>
 #include <string>
 #include <cstdint>
 #include <vector>
@@ -18,6 +19,9 @@ void Renderer::initVulkan(Window &window) {
     createInstance(window);
     pickPhysicalDevice();
     createDevice();
+    createAllocator();
+    createSurface(window);
+    createSwapchain(window);
 }
 
 void Renderer::createInstance(Window &window) {
@@ -158,20 +162,68 @@ void Renderer::createAllocator() {
 
 }
 
-void Renderer::createSwapchain() {
-    VkSwapchainCreateInfoKHR swapchainCreateInfo{
-    };
-
-    //vkCreateSwapchainKHR(m_device, &swapchainCreateInfo)
+void Renderer::createSurface(Window &window) {
+    window.createWindowSurface(m_instance, nullptr, &m_surface);
 }
 
-void Renderer::checkResult(VkResult result, std::string_view errorMessage) const {
+void Renderer::createSwapchain(Window &window) {
+    // Grab surface capabilities, minImageCount, imageExtent
+    VkSurfaceCapabilitiesKHR surfaceCapabilities{};
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physicalDevice, m_surface, &surfaceCapabilities);  // NOTE: not using version 2 since I don't need the extra features
+
+    // min image count
+    uint32_t minImageCount{std::max(3u, surfaceCapabilities.minImageCount)};
+    // clamp if we went over max
+    bool hasMaximum{0 != surfaceCapabilities.maxImageCount};
+    if (hasMaximum && surfaceCapabilities.maxImageCount < minImageCount) {
+        minImageCount = surfaceCapabilities.maxImageCount;
+    }
+
+    // image extent
+    // NOTE: has to do this because of sentinel value
+    VkExtent2D imageExtent{};
+    bool isLimited{surfaceCapabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()};
+    if (isLimited) {
+        imageExtent = surfaceCapabilities.currentExtent;
+    } else {
+        auto [width, height] = window.getFramebufferSize();
+        imageExtent.width = std::clamp<uint32_t>(width, surfaceCapabilities.minImageExtent.width, surfaceCapabilities.maxImageExtent.width);
+        imageExtent.height = std::clamp<uint32_t>(height, surfaceCapabilities.minImageExtent.height, surfaceCapabilities.maxImageExtent.height);
+    }
+
+    // NOTE: queueFamilyIndexCount, and pQueueFamilyIndices are not set because we are using exclusive sharing mode
+    VkSwapchainCreateInfoKHR swapchainCreateInfo{
+        .sType                 = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+        .pNext                 = nullptr,
+        .flags                 = {},
+        .surface               = m_surface,
+        .minImageCount         = minImageCount,
+        .imageFormat           = VK_FORMAT_B8G8R8A8_SRGB,  // NOTE: HowToVulkan says these two are guaranteed everywhere
+        .imageColorSpace       = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
+        .imageExtent           = imageExtent,
+        .imageArrayLayers      = 1,
+        .imageUsage            = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        .imageSharingMode      = VK_SHARING_MODE_EXCLUSIVE,
+        .preTransform          = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
+        .compositeAlpha        = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+        .presentMode           = VK_PRESENT_MODE_FIFO_KHR,  // always supported
+        .clipped               = VK_TRUE,
+        .oldSwapchain          = VK_NULL_HANDLE
+    };
+
+    checkResult(vkCreateSwapchainKHR(m_device, &swapchainCreateInfo, nullptr, &m_swapchain), "Error: failed to create Vulkan Swapchain");
+}
+
+void Renderer::checkResult(VkResult result, std::string errorMessage) const {
     if (result != VK_SUCCESS) {
-        throw std::runtime_error(std::string(errorMessage));  // std::string to have it null-terminated
+        throw std::runtime_error(errorMessage);
     }
 }
 
 void Renderer::cleanup() {
+    vkDestroySwapchainKHR(m_device, m_swapchain, nullptr);
+    vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
+    vmaDestroyAllocator(m_allocator);
     vkDestroyDevice(m_device, nullptr);
     vkDestroyInstance(m_instance, nullptr);
 }
