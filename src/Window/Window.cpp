@@ -1,3 +1,4 @@
+#include "volk.h"
 #include "Window.h"
 #include "Config.h"
 #include <stdexcept>
@@ -37,6 +38,18 @@ InstanceExtensionInfo Window::getRequiredInstanceExtensions() const {
     uint32_t glfwExtensionCount{};
     const char **glfwExtensions{glfwGetRequiredInstanceExtensions(&glfwExtensionCount)};
     return {glfwExtensionCount, glfwExtensions};
+}
+
+void Window::createWindowSurface(VkInstance instance, const VkAllocationCallbacks *allocator, VkSurfaceKHR *surface) {
+    if (glfwCreateWindowSurface(instance, m_window, allocator, surface) != VK_SUCCESS) {
+        throw std::runtime_error("Error: Failed to create Vulkan window surface");
+    }
+}
+
+FramebufferSize Window::getFramebufferSize() {
+    int width{}, height{};
+    glfwGetFramebufferSize(m_window, &width, &height);
+    return {width, height};
 }
 
 void Window::cleanup() {
