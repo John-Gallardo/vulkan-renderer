@@ -17,6 +17,7 @@ private:
     VmaAllocator              m_allocator               {VK_NULL_HANDLE};
     VkSurfaceKHR              m_surface                 {VK_NULL_HANDLE};
     VkSwapchainKHR            m_swapchain               {VK_NULL_HANDLE};
+    VkSurfaceFormatKHR        m_swapchainSurfaceFormat  {};
     std::vector<VkImage>      m_swapchainImages         {};
     std::vector<VkImageView>  m_swapchainImageViews     {};
     VkPipelineLayout          m_pipelineLayout          {VK_NULL_HANDLE};

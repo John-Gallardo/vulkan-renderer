@@ -168,7 +168,7 @@ void Renderer::createSurface(Window &window) {
 }
 
 void Renderer::createSwapchain(Window &window) {
-    // Grab surface capabilities, minImageCount, imageExtent
+    // Grab surface capabilities, minImageCount, imageExtent, surface format
     VkSurfaceCapabilitiesKHR surfaceCapabilities{};
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physicalDevice, m_surface, &surfaceCapabilities);  // NOTE: not using version 2 since I don't need the extra features
 
@@ -188,9 +188,14 @@ void Renderer::createSwapchain(Window &window) {
         imageExtent = surfaceCapabilities.currentExtent;
     } else {
         auto [width, height] = window.getFramebufferSize();
-        imageExtent.width = std::clamp<uint32_t>(width, surfaceCapabilities.minImageExtent.width, surfaceCapabilities.maxImageExtent.width);
+        imageExtent.width  = std::clamp<uint32_t>(width, surfaceCapabilities.minImageExtent.width, surfaceCapabilities.maxImageExtent.width);
         imageExtent.height = std::clamp<uint32_t>(height, surfaceCapabilities.minImageExtent.height, surfaceCapabilities.maxImageExtent.height);
     }
+
+    // surface format
+    // NOTE: HowToVulkan says these two are guaranteed everywhere (if swapchain is supported)
+    m_swapchainSurfaceFormat.format     = VK_FORMAT_B8G8R8A8_SRGB;
+    m_swapchainSurfaceFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 
     // NOTE: queueFamilyIndexCount, and pQueueFamilyIndices are not set because we are using exclusive sharing mode
     VkSwapchainCreateInfoKHR swapchainCreateInfo{
@@ -199,8 +204,8 @@ void Renderer::createSwapchain(Window &window) {
         .flags                 = {},
         .surface               = m_surface,
         .minImageCount         = minImageCount,
-        .imageFormat           = VK_FORMAT_B8G8R8A8_SRGB,  // NOTE: HowToVulkan says these two are guaranteed everywhere
-        .imageColorSpace       = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
+        .imageFormat           = m_swapchainSurfaceFormat.format,
+        .imageColorSpace       = m_swapchainSurfaceFormat.colorSpace,
         .imageExtent           = imageExtent,
         .imageArrayLayers      = 1,
         .imageUsage            = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
@@ -225,7 +230,7 @@ void Renderer::createImageViews() {
         .flags      = {},
         .image      = VK_NULL_HANDLE,
         .viewType   = VK_IMAGE_VIEW_TYPE_2D,
-        .format     = VK_FORMAT_B8G8R8A8_SRGB,
+        .format     = m_swapchainSurfaceFormat.format,
         .components = {},  // no swizzling
         .subresourceRange = {
             .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -409,10 +414,21 @@ void Renderer::createGraphicsPipeline() {
     };
     vkCreatePipelineLayout(m_device, &pipelineLayoutCreateInfo, nullptr, &m_pipelineLayout);
 
-    // 10. Finally create graphics pipeline
+    // 10. Dynamic Rendering
+    VkPipelineRenderingCreateInfo renderingCreateInfo{
+        .sType                   = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+        .pNext                   = nullptr,
+        .viewMask                = {},
+        .colorAttachmentCount    = 1,
+        .pColorAttachmentFormats = &m_swapchainSurfaceFormat.format,
+        .depthAttachmentFormat   = {},
+        .stencilAttachmentFormat = {}
+    };
+
+    // 11. Finally create graphics pipeline
     VkGraphicsPipelineCreateInfo graphicsPipelineCreateInfo{
         .sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-        .pNext               = nullptr,
+        .pNext               = &renderingCreateInfo,
         .flags               = {},
         .stageCount          = static_cast<uint32_t>(shaderStages.size()),
         .pStages             = shaderStages.data(),
