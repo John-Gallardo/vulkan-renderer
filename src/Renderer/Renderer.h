@@ -2,6 +2,7 @@
 #include "volk.h"
 #include "vk_mem_alloc.h"
 #include <vector>
+#include <string>
 class Window;
 
 class Renderer {
@@ -18,6 +19,8 @@ private:
     VkSwapchainKHR            m_swapchain               {VK_NULL_HANDLE};
     std::vector<VkImage>      m_swapchainImages         {};
     std::vector<VkImageView>  m_swapchainImageViews     {};
+    VkPipelineLayout          m_pipelineLayout          {VK_NULL_HANDLE};
+    VkPipeline                m_graphicsPipeline        {VK_NULL_HANDLE};
     std::vector<const char *> m_requiredDeviceExtensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
     void createInstance(Window &window);
@@ -27,6 +30,8 @@ private:
     void createSurface(Window &window);
     void createSwapchain(Window &window);
     void createImageViews();
+    void createGraphicsPipeline();
+    std::vector<char> readFile(const std::string &filename);
     void checkResult(VkResult result, const char *errorMessage) const;
     void swapchainCleanup();
 };
