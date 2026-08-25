@@ -10,9 +10,6 @@ endif()
 find_package(glfw3 3.3 REQUIRED)
 find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 find_program(IWYU_PATH NAMES include-what-you-use iwyu)
-if (NOT IWYU_PATH)
-    message(FATAL_ERROR "Could not find include-what-you-use")
-endif()
 
 set(SOURCE 
     src/main.cpp
@@ -50,4 +47,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 )
 
 # use programs
-set_target_properties(${PROJECT_NAME} PROPERTIES CXX_INCLUDE_WHAT_YOU_USE ${IWYU_PATH})
+if (IWYU_PATH)
+    set_target_properties(${PROJECT_NAME} PROPERTIES CXX_INCLUDE_WHAT_YOU_USE ${IWYU_PATH})
+endif()
+
