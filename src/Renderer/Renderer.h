@@ -9,6 +9,7 @@ class Window;
 class Renderer {
 public:
     void initVulkan(Window &window);
+    void drawFrame();
     void cleanup();
 private:
     VkInstance                   m_instance                {VK_NULL_HANDLE};
@@ -19,6 +20,7 @@ private:
     VmaAllocator                 m_allocator               {VK_NULL_HANDLE};
     VkSurfaceKHR                 m_surface                 {VK_NULL_HANDLE};
     VkSwapchainKHR               m_swapchain               {VK_NULL_HANDLE};
+    VkExtent2D                   m_swapchainExtent         {};
     VkSurfaceFormatKHR           m_swapchainSurfaceFormat  {};
     std::vector<VkImage>         m_swapchainImages         {};
     std::vector<VkImageView>     m_swapchainImageViews     {};
@@ -29,7 +31,11 @@ private:
     std::vector<VkFence>         m_renderWaitFences        {};
     std::vector<VkSemaphore>     m_acquireImageSemaphores  {};
     std::vector<VkSemaphore>     m_renderFinishedSemaphores{};
-    std::vector<const char *>    m_requiredDeviceExtensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+    uint32_t                     m_frameIndex              {};
+    std::vector<const char *>    m_requiredDeviceExtensions{
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME, 
+        VK_KHR_UNIFIED_IMAGE_LAYOUTS_EXTENSION_NAME
+    };
 
     void createInstance(Window &window);
     void pickPhysicalDevice();
@@ -42,7 +48,6 @@ private:
     void createCommandPool();
     void createCommandBuffers();
     void createSyncObjects();
-    void drawFrame();
 
     // Helper functions
     std::vector<char> readFile(const std::string &filename);

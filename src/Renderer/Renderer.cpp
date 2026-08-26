@@ -120,11 +120,18 @@ void Renderer::createDevice() {
         .pQueuePriorities = &queuePriority
     };
 
-    // structure chain for our used extensions
+    // structure chain for our used extensions & core features
+    VkPhysicalDeviceUnifiedImageLayoutsFeaturesKHR unifiedImageLayoutsFeatures{
+        .sType                    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_UNIFIED_IMAGE_LAYOUTS_FEATURES_KHR,
+        .pNext                    = nullptr,
+        .unifiedImageLayouts      = VK_TRUE,
+        .unifiedImageLayoutsVideo = VK_FALSE
+    };
+
     // NOTE: shaderDrawParameters was needed for triangle.spv
     VkPhysicalDeviceVulkan11Features vulkan11Features{
         .sType                = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
-        .pNext                = nullptr,
+        .pNext                = &unifiedImageLayoutsFeatures,
         .shaderDrawParameters = VK_TRUE
     };
 
@@ -192,14 +199,13 @@ void Renderer::createSwapchain(Window &window) {
 
     // image extent
     // NOTE: has to do this because of sentinel value
-    VkExtent2D imageExtent{};
     bool isLimited{surfaceCapabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()};
     if (isLimited) {
-        imageExtent = surfaceCapabilities.currentExtent;
+        m_swapchainExtent = surfaceCapabilities.currentExtent;
     } else {
         auto [width, height] = window.getFramebufferSize();
-        imageExtent.width  = std::clamp<uint32_t>(width, surfaceCapabilities.minImageExtent.width, surfaceCapabilities.maxImageExtent.width);
-        imageExtent.height = std::clamp<uint32_t>(height, surfaceCapabilities.minImageExtent.height, surfaceCapabilities.maxImageExtent.height);
+        m_swapchainExtent.width  = std::clamp<uint32_t>(width, surfaceCapabilities.minImageExtent.width, surfaceCapabilities.maxImageExtent.width);
+        m_swapchainExtent.height = std::clamp<uint32_t>(height, surfaceCapabilities.minImageExtent.height, surfaceCapabilities.maxImageExtent.height);
     }
 
     // surface format
@@ -216,7 +222,7 @@ void Renderer::createSwapchain(Window &window) {
         .minImageCount         = minImageCount,
         .imageFormat           = m_swapchainSurfaceFormat.format,
         .imageColorSpace       = m_swapchainSurfaceFormat.colorSpace,
-        .imageExtent           = imageExtent,
+        .imageExtent           = m_swapchainExtent,
         .imageArrayLayers      = 1,
         .imageUsage            = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         .imageSharingMode      = VK_SHARING_MODE_EXCLUSIVE,
@@ -472,7 +478,7 @@ void Renderer::createCommandPool() {
     VkCommandPoolCreateInfo commandPoolCreateInfo{
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .pNext = nullptr,
-        .flags = {},
+        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
         .queueFamilyIndex = m_queueIndex
     };
 
@@ -521,7 +527,197 @@ void Renderer::createSyncObjects() {
 }
 
 void Renderer::drawFrame() {
+    // 1. Wait for previous submission to finish rendering before we record commands
+    checkResult(vkWaitForFences(m_device, 1, &m_renderWaitFences[m_frameIndex], VK_TRUE, UINT64_MAX), "Error: failed to wait render wait fence");
+    checkResult(vkResetFences(m_device, 1, &m_renderWaitFences[m_frameIndex]), "Error: failed to reset render wait fence");
 
+    // 2. Record command buffer
+    uint32_t imageIndex{};
+    checkResult(vkAcquireNextImageKHR(m_device, m_swapchain, UINT64_MAX, m_acquireImageSemaphores[m_frameIndex], VK_NULL_HANDLE, &imageIndex), "Error: failed to acquire swapchain image");
+    VkCommandBufferBeginInfo commandBufferBeginInfo{
+        .sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .pNext            = nullptr,
+        .flags            = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+        .pInheritanceInfo = nullptr
+    };
+    checkResult(vkBeginCommandBuffer(m_commandBuffers[m_frameIndex], &commandBufferBeginInfo), "Error: failed to begin command buffer");
+
+    // Transition for rendering
+    VkImageMemoryBarrier2 imageMemoryBarrier{
+        .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .pNext               = nullptr,
+        .srcStageMask        = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .srcAccessMask       = {},
+        .dstStageMask        = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .dstAccessMask       = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        .oldLayout           = VK_IMAGE_LAYOUT_UNDEFINED,
+        .newLayout           = VK_IMAGE_LAYOUT_GENERAL,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image               = m_swapchainImages[imageIndex],
+        .subresourceRange    = {
+            .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel   = 0,
+            .levelCount     = 1,
+            .baseArrayLayer = 0,
+            .layerCount     = 1
+        }
+    }; 
+
+    VkDependencyInfo dependencyInfo{
+        .sType                    = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .pNext                    = nullptr,
+        .dependencyFlags          = {},
+        .memoryBarrierCount       = 0,
+        .pMemoryBarriers          = nullptr,
+        .bufferMemoryBarrierCount = 0,
+        .pBufferMemoryBarriers    = nullptr,
+        .imageMemoryBarrierCount  = 1,
+        .pImageMemoryBarriers     = &imageMemoryBarrier
+    };
+    vkCmdPipelineBarrier2(m_commandBuffers[m_frameIndex], &dependencyInfo);
+
+    // Dynamic Rendering
+    VkRenderingAttachmentInfo colorAttachmentInfo{
+        .sType              = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .pNext              = nullptr,
+        .imageView          = m_swapchainImageViews[imageIndex],
+        .imageLayout        = VK_IMAGE_LAYOUT_GENERAL,
+        .resolveMode        = {},
+        .resolveImageView   = VK_NULL_HANDLE,
+        .resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .loadOp             = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp            = VK_ATTACHMENT_STORE_OP_STORE,
+        .clearValue         = {
+            .color        = {0.0f, 0.0f, 0.0f, 1.0f},
+        }
+    };
+
+    VkRenderingInfo renderingInfo{
+        .sType                = VK_STRUCTURE_TYPE_RENDERING_INFO,
+        .pNext                = nullptr,
+        .flags                = {},
+        .renderArea           = {
+            .offset = {0, 0},
+            .extent = m_swapchainExtent
+        },
+        .layerCount           = 1,
+        .viewMask             = {},
+        .colorAttachmentCount = 1,
+        .pColorAttachments    = &colorAttachmentInfo,
+        .pDepthAttachment     = nullptr,
+        .pStencilAttachment   = nullptr,
+    };
+
+    // Start recording render commands & end once done
+    vkCmdBeginRendering(m_commandBuffers[m_frameIndex], &renderingInfo);
+
+    VkViewport viewport{
+        .x        = 0.0f,
+        .y        = 0.0f,
+        .width    = static_cast<float>(m_swapchainExtent.width),
+        .height   = static_cast<float>(m_swapchainExtent.height),
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f
+    };
+    vkCmdSetViewport(m_commandBuffers[m_frameIndex], 0, 1, &viewport);
+
+    VkRect2D scissor{
+        .offset = {0, 0},
+        .extent = {m_swapchainExtent}
+    };
+    vkCmdSetScissor(m_commandBuffers[m_frameIndex], 0, 1, &scissor);
+
+    vkCmdBindPipeline(m_commandBuffers[m_frameIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
+
+    vkCmdDraw(m_commandBuffers[m_frameIndex], 3, 1, 0, 0);
+
+    vkCmdEndRendering(m_commandBuffers[m_frameIndex]);
+
+    // Transition for presentation
+    VkImageMemoryBarrier2 presentationTransitionBarrier{
+        .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .pNext               = nullptr,
+        .srcStageMask        = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .srcAccessMask       = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        .dstStageMask        = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
+        .dstAccessMask       = VK_ACCESS_2_NONE,
+        .oldLayout           = VK_IMAGE_LAYOUT_GENERAL,
+        .newLayout           = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image               = m_swapchainImages[imageIndex],
+        .subresourceRange    = {
+            .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel   = 0,
+            .levelCount     = 1,
+            .baseArrayLayer = 0,
+            .layerCount     = 1
+        }
+    }; 
+
+    VkDependencyInfo presentationDependencyInfo{
+        .sType                    = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .pNext                    = nullptr,
+        .dependencyFlags          = {},
+        .memoryBarrierCount       = 0,
+        .pMemoryBarriers          = nullptr,
+        .bufferMemoryBarrierCount = 0,
+        .pBufferMemoryBarriers    = nullptr,
+        .imageMemoryBarrierCount  = 1,
+        .pImageMemoryBarriers     = &presentationTransitionBarrier
+    };
+    vkCmdPipelineBarrier2(m_commandBuffers[m_frameIndex], &presentationDependencyInfo);
+
+    checkResult(vkEndCommandBuffer(m_commandBuffers[m_frameIndex]), "Error: failed to end command buffer recording");
+
+    // 3. Submit command buffer
+    VkSemaphoreSubmitInfo waitSemaphoreSubmitInfo{
+        .sType       = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+        .pNext       = nullptr,
+        .semaphore   = m_acquireImageSemaphores[m_frameIndex],
+        .value       = {},
+        .stageMask   = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .deviceIndex = 0,
+    };
+
+    VkSemaphoreSubmitInfo renderFinishedSemaphoreSubmitInfo{
+        .sType       = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+        .pNext       = nullptr,
+        .semaphore   = m_renderFinishedSemaphores[imageIndex],
+        .value       = {},
+        .stageMask   = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .deviceIndex = 0,
+    };
+
+    VkSubmitInfo2 submitInfo{
+        .sType                    = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .pNext                    = nullptr,
+        .flags                    = {},
+        .waitSemaphoreInfoCount   = 1,
+        .pWaitSemaphoreInfos      = &waitSemaphoreSubmitInfo,
+        .commandBufferInfoCount   = 0,
+        .pCommandBufferInfos      = nullptr,
+        .signalSemaphoreInfoCount = 1,
+        .pSignalSemaphoreInfos    = &renderFinishedSemaphoreSubmitInfo
+    };
+    checkResult(vkQueueSubmit2KHR(m_queue, 1, &submitInfo, m_renderWaitFences[m_frameIndex]), "Error: failed to submit command buffer to queue");
+
+    // 4. Present image
+    VkPresentInfoKHR presentInfo{
+        .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+        .pNext = nullptr,
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores    = &m_renderFinishedSemaphores[imageIndex],
+        .swapchainCount     = 1,
+        .pSwapchains        = &m_swapchain,
+        .pImageIndices      = &imageIndex,
+        .pResults           = nullptr
+    };
+
+    checkResult(vkQueuePresentKHR(m_queue, &presentInfo), "Error: failed to present swapchain image");
+
+    m_frameIndex = (m_frameIndex + 1) % Config::maxFramesInFlight;
 }
 
 std::vector<char> Renderer::readFile(const std::string &filename) {
