@@ -280,8 +280,8 @@ void Renderer::createGraphicsPipeline() {
 
     VkShaderModule vertexShaderModule{VK_NULL_HANDLE}, fragmentShaderModule{VK_NULL_HANDLE};
 
-    vkCreateShaderModule(m_device, &shaderModuleCreateInfo, nullptr, &vertexShaderModule);
-    vkCreateShaderModule(m_device, &shaderModuleCreateInfo, nullptr, &fragmentShaderModule);
+    checkResult(vkCreateShaderModule(m_device, &shaderModuleCreateInfo, nullptr, &vertexShaderModule), "Error: failed to create vertex shader module");
+    checkResult(vkCreateShaderModule(m_device, &shaderModuleCreateInfo, nullptr, &fragmentShaderModule), "Error: failed to create fragment shader module");
 
     std::vector<VkPipelineShaderStageCreateInfo> shaderStages{
         {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -467,7 +467,7 @@ void Renderer::createGraphicsPipeline() {
         .basePipelineIndex   = {}
     };
 
-    vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &graphicsPipelineCreateInfo, nullptr, &m_graphicsPipeline);
+    checkResult(vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &graphicsPipelineCreateInfo, nullptr, &m_graphicsPipeline), "Error: failed to create graphics pipeline");
 
     // 12. cleanup
     vkDestroyShaderModule(m_device, vertexShaderModule, nullptr);
