@@ -230,10 +230,13 @@ void Renderer::createSwapchain(Window &window) {
     checkResult(vkCreateSwapchainKHR(m_device, &swapchainCreateInfo, nullptr, &m_swapchain), "Error: failed to create Vulkan Swapchain");
     uint32_t imageCount{};
     checkResult(vkGetSwapchainImagesKHR(m_device, m_swapchain, &imageCount, nullptr), "Error: failed to grab Vulkan Swapchain image count");
+    m_swapchainImages.resize(imageCount);
     checkResult(vkGetSwapchainImagesKHR(m_device, m_swapchain, &imageCount, m_swapchainImages.data()), "Error: failed to fill Vulkan swapchain image array");
 }
 
 void Renderer::createImageViews() {
+    m_swapchainImageViews.resize(m_swapchainImages.size());
+
     VkImageViewCreateInfo imageViewCreateInfo{
         .sType      = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .pNext      = nullptr,
@@ -473,11 +476,11 @@ void Renderer::createCommandPool() {
         .queueFamilyIndex = m_queueIndex
     };
 
-    vkCreateCommandPool(m_device, &commandPoolCreateInfo, nullptr, &m_commandPool);
+    checkResult(vkCreateCommandPool(m_device, &commandPoolCreateInfo, nullptr, &m_commandPool), "Error: failed to create Vulkan command pool");
 }
 
 void Renderer::createCommandBuffers() {
-    m_commandBuffers.reserve(Config::maxFramesInFlight);
+    m_commandBuffers.resize(Config::maxFramesInFlight);
 
     VkCommandBufferAllocateInfo commandBufferAllocateInfo{
         .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -487,11 +490,34 @@ void Renderer::createCommandBuffers() {
         .commandBufferCount = Config::maxFramesInFlight
     };
 
-    vkAllocateCommandBuffers(m_device, &commandBufferAllocateInfo, m_commandBuffers.data());
+    checkResult(vkAllocateCommandBuffers(m_device, &commandBufferAllocateInfo, m_commandBuffers.data()), "Error: failed to allocate Vulkan command buffers");
 }
 
 void Renderer::createSyncObjects() {
+    m_renderWaitFences.resize(Config::maxFramesInFlight);
+    m_acquireImageSemaphores.resize(Config::maxFramesInFlight);
+    m_renderFinishedSemaphores.resize(m_swapchainImages.size());
 
+    VkFenceCreateInfo fenceCreateInfo{
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = VK_FENCE_CREATE_SIGNALED_BIT
+    };
+
+    VkSemaphoreCreateInfo semaphoreCreateInfo{
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = {}
+    };
+    
+    for (int i : std::views::iota(0, Config::maxFramesInFlight)) {
+        checkResult(vkCreateFence(m_device, &fenceCreateInfo, nullptr, &m_renderWaitFences[i]), "Error: failed to create render wait fence");
+        checkResult(vkCreateSemaphore(m_device, &semaphoreCreateInfo, nullptr, &m_acquireImageSemaphores[i]), "Error: failed to create acquire image semaphore");
+    }
+
+    for (int i : std::views::iota(0uz, m_swapchainImages.size())) {
+        checkResult(vkCreateSemaphore(m_device, &semaphoreCreateInfo, nullptr, &m_renderFinishedSemaphores[i]), "Error: failed to create render finished semaphore");
+    }
 }
 
 void Renderer::drawFrame() {
@@ -520,6 +546,7 @@ void Renderer::checkResult(VkResult result, const char *errorMessage) const {
 
 void Renderer::cleanup() {
     vkDeviceWaitIdle(m_device);
+    syncObjectCleanup();
     vkDestroyCommandPool(m_device, m_commandPool, nullptr);
     vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
     vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
@@ -535,4 +562,15 @@ void Renderer::swapchainCleanup() {
         vkDestroyImageView(m_device, imageView, nullptr);
     }
     vkDestroySwapchainKHR(m_device, m_swapchain, nullptr);
+}
+
+void Renderer::syncObjectCleanup() {
+    for (int i : std::views::iota(0, Config::maxFramesInFlight)) {
+        vkDestroyFence(m_device, m_renderWaitFences[i], nullptr);
+        vkDestroySemaphore(m_device, m_acquireImageSemaphores[i], nullptr);
+    }
+
+    for (int i : std::views::iota(0uz, m_swapchainImages.size())) {
+        vkDestroySemaphore(m_device, m_renderFinishedSemaphores[i], nullptr);
+    }
 }

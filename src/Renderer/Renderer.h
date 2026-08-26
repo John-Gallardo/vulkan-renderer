@@ -26,7 +26,7 @@ private:
     VkPipeline                   m_graphicsPipeline        {VK_NULL_HANDLE};
     VkCommandPool                m_commandPool             {VK_NULL_HANDLE};
     std::vector<VkCommandBuffer> m_commandBuffers          {};
-    std::vector<VkFence>         m_renderWaitFence         {};
+    std::vector<VkFence>         m_renderWaitFences        {};
     std::vector<VkSemaphore>     m_acquireImageSemaphores  {};
     std::vector<VkSemaphore>     m_renderFinishedSemaphores{};
     std::vector<const char *>    m_requiredDeviceExtensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
@@ -48,4 +48,5 @@ private:
     std::vector<char> readFile(const std::string &filename);
     void checkResult(VkResult result, const char *errorMessage) const;
     void swapchainCleanup();
+    void syncObjectCleanup();
 };
