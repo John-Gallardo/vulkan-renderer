@@ -10,7 +10,6 @@
 #include <stdexcept>
 #include <algorithm>
 #include <limits>
-#include <cstdint>
 #include <vector>
 #include <queue>
 #include <print>
@@ -23,6 +22,11 @@ void Renderer::initVulkan(Window &window) {
     createAllocator();
     createSurface(window);
     createSwapchain(window);
+    createImageViews();
+    createGraphicsPipeline();
+    createCommandPool();
+    createCommandBuffers();
+    createSyncObjects();
 }
 
 void Renderer::createInstance(Window &window) {
@@ -99,10 +103,9 @@ void Renderer::createDevice() {
     std::vector<VkQueueFamilyProperties> queueFamilyProperties(queueFamilyPropertyCount);
     vkGetPhysicalDeviceQueueFamilyProperties(m_physicalDevice, &queueFamilyPropertyCount, queueFamilyProperties.data());
 
-    uint32_t graphicsQueueFamilyIndex{};
     for (auto [i, queueFamilyProperty] : std::views::enumerate(queueFamilyProperties)) {
         if (queueFamilyProperty.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-            graphicsQueueFamilyIndex = i;
+            m_queueIndex = i;
             break;
         }
     }
@@ -112,15 +115,22 @@ void Renderer::createDevice() {
         .sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
         .pNext            = nullptr,
         .flags            = {},
-        .queueFamilyIndex = graphicsQueueFamilyIndex,
+        .queueFamilyIndex = m_queueIndex,
         .queueCount       = 1,
         .pQueuePriorities = &queuePriority
     };
 
     // structure chain for our used extensions
+    // NOTE: shaderDrawParameters was needed for triangle.spv
+    VkPhysicalDeviceVulkan11Features vulkan11Features{
+        .sType                = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
+        .pNext                = nullptr,
+        .shaderDrawParameters = VK_TRUE
+    };
+
     VkPhysicalDeviceVulkan13Features vulkan13Features{
         .sType            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
-        .pNext            = nullptr,
+        .pNext            = &vulkan11Features,
         .synchronization2 = VK_TRUE,
         .dynamicRendering = VK_TRUE
     };
@@ -136,7 +146,7 @@ void Renderer::createDevice() {
     };
 
     checkResult(vkCreateDevice(m_physicalDevice, &deviceCreateInfo, nullptr, &m_device), "Error: failed to create a Vulkan logical device");
-    vkGetDeviceQueue(m_device, graphicsQueueFamilyIndex, 0, &m_queue);
+    vkGetDeviceQueue(m_device, m_queueIndex, 0, &m_queue);
     volkLoadDevice(m_device);
 }
 
@@ -250,7 +260,7 @@ void Renderer::createImageViews() {
 void Renderer::createGraphicsPipeline() {
     // 1. Shader stage
     // create shader modules first
-    std::vector<char> shaderCode{readFile(PROJECT_ROOT_DIR "src/shaders/triangle.spv")};
+    std::vector<char> shaderCode{readFile(PROJECT_ROOT_DIR "src/Shaders/triangle.spv")};
     VkShaderModuleCreateInfo shaderModuleCreateInfo{
         .sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
         .pNext    = nullptr,
@@ -307,9 +317,9 @@ void Renderer::createGraphicsPipeline() {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
         .pNext = nullptr,
         .flags = {},
-        .viewportCount = 0,
+        .viewportCount = 1,
         .pViewports = nullptr,
-        .scissorCount = 0,
+        .scissorCount = 1,
         .pScissors = nullptr
     };
 
@@ -369,12 +379,12 @@ void Renderer::createGraphicsPipeline() {
         .srcAlphaBlendFactor = {},
         .dstAlphaBlendFactor = {},
         .alphaBlendOp        = {},
-        .colorWriteMask = {
+        .colorWriteMask      = 
             VK_COLOR_COMPONENT_R_BIT |
             VK_COLOR_COMPONENT_G_BIT |
             VK_COLOR_COMPONENT_B_BIT |
             VK_COLOR_COMPONENT_A_BIT
-        }}
+        }
     };
 
     VkPipelineColorBlendStateCreateInfo colorBlendStateCreateInfo{
@@ -441,6 +451,7 @@ void Renderer::createGraphicsPipeline() {
         .pDepthStencilState  = &depthStencilStateCreateInfo,
         .pColorBlendState    = &colorBlendStateCreateInfo,
         .pDynamicState       = &dynamicStateCreateInfo,
+        .layout              = m_pipelineLayout,
         .renderPass          = VK_NULL_HANDLE,
         .subpass             = {},
         .basePipelineHandle  = VK_NULL_HANDLE,
@@ -448,6 +459,43 @@ void Renderer::createGraphicsPipeline() {
     };
 
     vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &graphicsPipelineCreateInfo, nullptr, &m_graphicsPipeline);
+
+    // 12. cleanup
+    vkDestroyShaderModule(m_device, vertexShaderModule, nullptr);
+    vkDestroyShaderModule(m_device, fragmentShaderModule, nullptr);
+}
+
+void Renderer::createCommandPool() {
+    VkCommandPoolCreateInfo commandPoolCreateInfo{
+        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = {},
+        .queueFamilyIndex = m_queueIndex
+    };
+
+    vkCreateCommandPool(m_device, &commandPoolCreateInfo, nullptr, &m_commandPool);
+}
+
+void Renderer::createCommandBuffers() {
+    m_commandBuffers.reserve(Config::maxFramesInFlight);
+
+    VkCommandBufferAllocateInfo commandBufferAllocateInfo{
+        .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .pNext              = nullptr,
+        .commandPool        = m_commandPool,
+        .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = Config::maxFramesInFlight
+    };
+
+    vkAllocateCommandBuffers(m_device, &commandBufferAllocateInfo, m_commandBuffers.data());
+}
+
+void Renderer::createSyncObjects() {
+
+}
+
+void Renderer::drawFrame() {
+
 }
 
 std::vector<char> Renderer::readFile(const std::string &filename) {
@@ -472,6 +520,7 @@ void Renderer::checkResult(VkResult result, const char *errorMessage) const {
 
 void Renderer::cleanup() {
     vkDeviceWaitIdle(m_device);
+    vkDestroyCommandPool(m_device, m_commandPool, nullptr);
     vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
     vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
     swapchainCleanup();
