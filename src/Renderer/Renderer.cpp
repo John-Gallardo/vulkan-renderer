@@ -681,6 +681,13 @@ void Renderer::drawFrame() {
         .deviceIndex = 0,
     };
 
+    VkCommandBufferSubmitInfo commandBufferSubmitInfo{
+        .sType         = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+        .pNext         = nullptr,
+        .commandBuffer = m_commandBuffers[m_frameIndex],
+        .deviceMask    = 0
+    };
+
     VkSemaphoreSubmitInfo renderFinishedSemaphoreSubmitInfo{
         .sType       = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
         .pNext       = nullptr,
@@ -691,17 +698,17 @@ void Renderer::drawFrame() {
     };
 
     VkSubmitInfo2 submitInfo{
-        .sType                    = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .sType                    = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
         .pNext                    = nullptr,
         .flags                    = {},
         .waitSemaphoreInfoCount   = 1,
         .pWaitSemaphoreInfos      = &waitSemaphoreSubmitInfo,
-        .commandBufferInfoCount   = 0,
-        .pCommandBufferInfos      = nullptr,
+        .commandBufferInfoCount   = 1,
+        .pCommandBufferInfos      = &commandBufferSubmitInfo,
         .signalSemaphoreInfoCount = 1,
         .pSignalSemaphoreInfos    = &renderFinishedSemaphoreSubmitInfo
     };
-    checkResult(vkQueueSubmit2KHR(m_queue, 1, &submitInfo, m_renderWaitFences[m_frameIndex]), "Error: failed to submit command buffer to queue");
+    checkResult(vkQueueSubmit2(m_queue, 1, &submitInfo, m_renderWaitFences[m_frameIndex]), "Error: failed to submit command buffer to queue");
 
     // 4. Present image
     VkPresentInfoKHR presentInfo{
