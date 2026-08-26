@@ -1,7 +1,7 @@
 static const float2 g_triangleVertices[3] = {
     {0, -0.5},    // top
-    {-0.5, 0.5},  // bottom-left
-    {0.5, 0.5}    // bottom-right
+    {0.5, 0.5},   // bottom-right
+    {-0.5, 0.5}  // bottom-left
 };
 
 [shader("vertex")]
