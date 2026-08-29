@@ -526,14 +526,22 @@ void Renderer::createSyncObjects() {
     }
 }
 
-void Renderer::drawFrame() {
+void Renderer::drawFrame(Window &window) {
     // 1. Wait for previous submission to finish rendering before we record commands
     checkResult(vkWaitForFences(m_device, 1, &m_renderWaitFences[m_frameIndex], VK_TRUE, UINT64_MAX), "Error: failed to wait render wait fence");
-    checkResult(vkResetFences(m_device, 1, &m_renderWaitFences[m_frameIndex]), "Error: failed to reset render wait fence");
 
     // 2. Record command buffer
     uint32_t imageIndex{};
-    checkResult(vkAcquireNextImageKHR(m_device, m_swapchain, UINT64_MAX, m_acquireImageSemaphores[m_frameIndex], VK_NULL_HANDLE, &imageIndex), "Error: failed to acquire swapchain image");
+    VkResult result{vkAcquireNextImageKHR(m_device, m_swapchain, UINT64_MAX, m_acquireImageSemaphores[m_frameIndex], VK_NULL_HANDLE, &imageIndex)};
+    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+        recreateSwapchain(window);
+        return;
+    } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+        throw std::runtime_error("Error: failed to acquire Vulkan swapchain image");
+    }
+
+    checkResult(vkResetFences(m_device, 1, &m_renderWaitFences[m_frameIndex]), "Error: failed to reset render wait fence");
+
     VkCommandBufferBeginInfo commandBufferBeginInfo{
         .sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         .pNext            = nullptr,
@@ -722,9 +730,22 @@ void Renderer::drawFrame() {
         .pResults           = nullptr
     };
 
-    checkResult(vkQueuePresentKHR(m_queue, &presentInfo), "Error: failed to present swapchain image");
+    result = vkQueuePresentKHR(m_queue, &presentInfo);
+    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+        recreateSwapchain(window);
+        // NOTE: since we used synchronization primitives we still want to increment frame index here
+    } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+        throw std::runtime_error("Error: failed to present swapchain image");
+    }
 
     m_frameIndex = (m_frameIndex + 1) % Config::maxFramesInFlight;
+}
+
+void Renderer::recreateSwapchain(Window &window) {
+    vkDeviceWaitIdle(m_device);
+    swapchainCleanup();
+    createSwapchain(window);
+    createImageViews();
 }
 
 std::vector<char> Renderer::readFile(const std::string &filename) {

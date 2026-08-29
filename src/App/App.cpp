@@ -13,7 +13,7 @@ void App::mainLoop() {
     while (!m_window.shouldClose()) {
         m_window.pollEvents();
         m_input.processUserInput(m_window);
-        m_renderer.drawFrame();
+        m_renderer.drawFrame(m_window);
     }
 }
 

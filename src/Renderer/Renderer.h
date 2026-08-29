@@ -9,7 +9,7 @@ class Window;
 class Renderer {
 public:
     void initVulkan(Window &window);
-    void drawFrame();
+    void drawFrame(Window &window);  // for potential swapchain recreation
     void cleanup();
 private:
     VkInstance                   m_instance                {VK_NULL_HANDLE};
@@ -48,6 +48,7 @@ private:
     void createCommandPool();
     void createCommandBuffers();
     void createSyncObjects();
+    void recreateSwapchain(Window &window);
 
     // Helper functions
     std::vector<char> readFile(const std::string &filename);
