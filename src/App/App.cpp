@@ -18,6 +18,6 @@ void App::mainLoop() {
 }
 
 void App::cleanup() {
-    m_window.cleanup();
     m_renderer.cleanup();
+    m_window.cleanup();
 }

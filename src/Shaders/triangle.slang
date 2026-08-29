@@ -4,6 +4,12 @@ static const float2 g_triangleVertices[3] = {
     {-0.5, 0.5}  // bottom-left
 };
 
+static const float4 g_colors[3] = {
+    {1.0, 0.0, 0.0, 1.0},
+    {0.0, 1.0, 0.0, 1.0},
+    {0.0, 0.0, 1.0, 1.0}
+};
+
 [shader("vertex")]
 float4 vertexMain(uint vertexID : SV_VertexID) : SV_Position {
     return float4(g_triangleVertices[vertexID], 0.0, 1.0);
