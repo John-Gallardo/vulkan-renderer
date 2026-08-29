@@ -11,11 +11,12 @@ static const float4 g_colors[3] = {
 };
 
 [shader("vertex")]
-float4 vertexMain(uint vertexID : SV_VertexID) : SV_Position {
+float4 vertexMain(uint vertexID : SV_VertexID, out float4 color) : SV_Position {
+    color = g_colors[vertexID];
     return float4(g_triangleVertices[vertexID], 0.0, 1.0);
 }
 
 [shader("fragment")]
-float4 fragmentMain() : SV_Target {
-    return {1.0, 1.0, 1.0, 1.0};
+float4 fragmentMain(float4 color) : SV_Target {
+    return color;
 }
