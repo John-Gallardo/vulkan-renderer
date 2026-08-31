@@ -1,6 +1,7 @@
 #pragma once
 #include "volk.h"
 #include "vk_mem_alloc.h"
+#include "tiny_gltf_v3.h"
 #include <vector>
 #include <cstdint>
 #include <string>
@@ -10,6 +11,7 @@ class Renderer {
 public:
     void initVulkan(Window &window);
     void drawFrame(Window &window);  // for potential swapchain recreation
+    void loadModels();
     void cleanup();
 private:
     VkInstance                   m_instance                {VK_NULL_HANDLE};
@@ -19,11 +21,13 @@ private:
     uint32_t                     m_queueIndex              {};
     VmaAllocator                 m_allocator               {VK_NULL_HANDLE};
     VkSurfaceKHR                 m_surface                 {VK_NULL_HANDLE};
+    // swapchain
     VkSwapchainKHR               m_swapchain               {VK_NULL_HANDLE};
     VkExtent2D                   m_swapchainExtent         {};
     VkSurfaceFormatKHR           m_swapchainSurfaceFormat  {};
     std::vector<VkImage>         m_swapchainImages         {};
     std::vector<VkImageView>     m_swapchainImageViews     {};
+    // pipeline & rendering
     VkPipelineLayout             m_pipelineLayout          {VK_NULL_HANDLE};
     VkPipeline                   m_graphicsPipeline        {VK_NULL_HANDLE};
     VkCommandPool                m_commandPool             {VK_NULL_HANDLE};
@@ -32,9 +36,14 @@ private:
     std::vector<VkSemaphore>     m_acquireImageSemaphores  {};
     std::vector<VkSemaphore>     m_renderFinishedSemaphores{};
     uint32_t                     m_frameIndex              {};
+    // models
+    VkBuffer                     m_buffer                  {VK_NULL_HANDLE};
+    tg3_model                    m_model                   {};
+    tg3_error_stack              m_errors                  {};
     std::vector<const char *>    m_requiredDeviceExtensions{
         VK_KHR_SWAPCHAIN_EXTENSION_NAME, 
-        VK_KHR_UNIFIED_IMAGE_LAYOUTS_EXTENSION_NAME
+        VK_KHR_UNIFIED_IMAGE_LAYOUTS_EXTENSION_NAME,
+        //VK_KHR_SHADER_UNTYPED_POINTERS_EXTENSION_NAME,  // required by descriptor heap
     };
 
     void createInstance(Window &window);
@@ -48,6 +57,7 @@ private:
     void createCommandPool();
     void createCommandBuffers();
     void createSyncObjects();
+    void createBuffer();
     void recreateSwapchain(Window &window);
 
     // Helper functions
@@ -55,4 +65,5 @@ private:
     void checkResult(VkResult result, const char *errorMessage) const;
     void swapchainCleanup();
     void syncObjectCleanup();
+    void modelCleanup();
 };
