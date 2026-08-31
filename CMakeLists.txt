@@ -22,15 +22,19 @@ set(SOURCE
 set(LIBS
     libs/volk.c
     libs/vmaImplementation.cpp
+    libs/tiny_gltf_v3.c
 )
 
 add_executable(${PROJECT_NAME} ${SOURCE} ${LIBS})
 
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23)
 
-# treat src & lib as a root
-target_include_directories(${PROJECT_NAME} PRIVATE src)
-target_include_directories(${PROJECT_NAME} PRIVATE libs)
+# treat src, lib, and models as root
+target_include_directories(${PROJECT_NAME} PRIVATE 
+    src
+    libs
+    models
+)
 
 # defines
 target_compile_definitions(${PROJECT_NAME} PRIVATE
@@ -38,6 +42,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
     VMA_STATIC_VULKAN_FUNCTIONS=0
     VMA_DYNAMIC_VULKAN_FUNCTIONS=0
     PROJECT_ROOT_DIR="${CMAKE_SOURCE_DIR}/"
+    TINYGLTF3_ENABLE_FS
 )
 
 # link libraries
