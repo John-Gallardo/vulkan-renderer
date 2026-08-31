@@ -1,11 +1,13 @@
 #include "App.h"
 #include "Window/Window.h"
 #include "Input/Input.h"
+#include "ModelLoader/ModelLoader.h"
 
 void App::run() {
     m_window.initWindow();
     m_renderer.initVulkan(m_window);
-    m_renderer.loadModels();
+    // TODO:
+    m_modelLoader.loadModels();
     mainLoop();
     cleanup();
 }

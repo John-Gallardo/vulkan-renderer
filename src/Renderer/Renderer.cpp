@@ -3,9 +3,6 @@
 #include "Window/Window.h"
 #include "volk.h"
 #include "vk_mem_alloc.h"
-#include "tiny_gltf_v3.h"
-#include <iostream>  // for std::cerr
-#include <cstring>   // for std::strlen
 #include <ranges>
 #include <string>
 #include <fstream>
@@ -786,23 +783,6 @@ std::vector<char> Renderer::readFile(const std::string &filename) {
     return fileContents;
 }
 
-void Renderer::loadModels() {
-    tg3_parse_options options{};
-
-    tg3_parse_options_init(&options);
-    tg3_error_stack_init(&m_errors);
-
-    const char *path{PROJECT_ROOT_DIR "models/cloud_strife/scene.gltf"};
-    tg3_error_code error{tg3_parse_file(&m_model, &m_errors, path, std::strlen(path), &options)};
-
-    if (error != TG3_OK) {
-        for (uint32_t i{0}; i < m_errors.count; i++) {
-            std::println(std::cerr, "[{}] {} \n", static_cast<int>(m_errors.entries[i].severity), m_errors.entries[i].message ? m_errors.entries[i].message : "(null)");
-        }
-        throw std::runtime_error("Error: failed to load Cloud Strife model");
-    }
-}
-
 void Renderer::checkResult(VkResult result, const char *errorMessage) const {
     if (result != VK_SUCCESS) {
         throw std::runtime_error(errorMessage);
@@ -811,7 +791,6 @@ void Renderer::checkResult(VkResult result, const char *errorMessage) const {
 
 void Renderer::cleanup() {
     vkDeviceWaitIdle(m_device);
-    modelCleanup();
     syncObjectCleanup();
     vkDestroyCommandPool(m_device, m_commandPool, nullptr);
     vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
@@ -839,9 +818,4 @@ void Renderer::syncObjectCleanup() {
     for (int i : std::views::iota(0uz, m_swapchainImages.size())) {
         vkDestroySemaphore(m_device, m_renderFinishedSemaphores[i], nullptr);
     }
-}
-
-void Renderer::modelCleanup() {
-    tg3_model_free(&m_model);
-    tg3_error_stack_free(&m_errors);
 }

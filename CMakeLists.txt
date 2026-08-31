@@ -18,6 +18,7 @@ set(SOURCE
     src/Window/Window.cpp 
     src/Input/Input.cpp 
     src/Renderer/Renderer.cpp
+    src/ModelLoader/ModelLoader.cpp
 )
 
 set(LIBS

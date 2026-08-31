@@ -1,7 +1,6 @@
 #pragma once
 #include "volk.h"
 #include "vk_mem_alloc.h"
-#include "tiny_gltf_v3.h"
 #include <vector>
 #include <cstdint>
 #include <string>
@@ -36,10 +35,9 @@ private:
     std::vector<VkSemaphore>     m_acquireImageSemaphores  {};
     std::vector<VkSemaphore>     m_renderFinishedSemaphores{};
     uint32_t                     m_frameIndex              {};
-    // models
+    // model loading for Vulkan
     VkBuffer                     m_buffer                  {VK_NULL_HANDLE};
-    tg3_model                    m_model                   {};
-    tg3_error_stack              m_errors                  {};
+    // extensions
     std::vector<const char *>    m_requiredDeviceExtensions{
         VK_KHR_SWAPCHAIN_EXTENSION_NAME, 
         VK_KHR_UNIFIED_IMAGE_LAYOUTS_EXTENSION_NAME,
@@ -65,5 +63,4 @@ private:
     void checkResult(VkResult result, const char *errorMessage) const;
     void swapchainCleanup();
     void syncObjectCleanup();
-    void modelCleanup();
 };
