@@ -7,6 +7,7 @@ if (NOT CMAKE_BUILD_TYPE)
 endif()
 
 # packages & programs
+find_package(assimp REQUIRED)
 find_package(glfw3 3.3 REQUIRED)
 find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 find_program(IWYU_PATH NAMES include-what-you-use iwyu)
@@ -22,7 +23,6 @@ set(SOURCE
 set(LIBS
     libs/volk.c
     libs/vmaImplementation.cpp
-    libs/tiny_gltf_v3.c
 )
 
 add_executable(${PROJECT_NAME} ${SOURCE} ${LIBS})
@@ -42,13 +42,13 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
     VMA_STATIC_VULKAN_FUNCTIONS=0
     VMA_DYNAMIC_VULKAN_FUNCTIONS=0
     PROJECT_ROOT_DIR="${CMAKE_SOURCE_DIR}/"
-    TINYGLTF3_ENABLE_FS
 )
 
 # link libraries
 target_link_libraries(${PROJECT_NAME} PRIVATE
     glfw
     GPUOpen::VulkanMemoryAllocator
+    assimp::assimp
 )
 
 # use programs
