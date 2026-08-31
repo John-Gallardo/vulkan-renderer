@@ -30,6 +30,10 @@ void Renderer::initVulkan(Window &window) {
     createBuffer();
 }
 
+void Renderer::uploadModel(std::vector<Vertex> &vertices, std::vector<uint32_t> &indices) {
+    
+}
+
 void Renderer::createInstance(Window &window) {
     constexpr VkApplicationInfo applicationInfo{
         .sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO,

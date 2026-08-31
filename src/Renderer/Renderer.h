@@ -5,12 +5,13 @@
 #include <cstdint>
 #include <string>
 class Window;
+struct Vertex;
 
 class Renderer {
 public:
     void initVulkan(Window &window);
     void drawFrame(Window &window);  // for potential swapchain recreation
-    void loadModels();
+    void uploadModel(std::vector<Vertex> &vertices, std::vector<uint32_t> &indices);
     void cleanup();
 private:
     VkInstance                   m_instance                {VK_NULL_HANDLE};

@@ -6,8 +6,8 @@
 void App::run() {
     m_window.initWindow();
     m_renderer.initVulkan(m_window);
-    // TODO:
-    m_modelLoader.loadModels();
+    m_modelLoader.loadModel(m_vertices, m_indices);
+    m_renderer.uploadModel(m_vertices, m_indices);
     mainLoop();
     cleanup();
 }
