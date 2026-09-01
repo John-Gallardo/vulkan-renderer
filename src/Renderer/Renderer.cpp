@@ -13,6 +13,7 @@
 #include <vector>
 #include <queue>
 #include <print>
+#include <cstring>  // for memcpy
 
 void Renderer::initVulkan(Window &window) {
     checkResult(volkInitialize(), "Error: failed to initialize Volk");
@@ -27,11 +28,16 @@ void Renderer::initVulkan(Window &window) {
     createCommandPool();
     createCommandBuffers();
     createSyncObjects();
-    createBuffer();
 }
 
 void Renderer::uploadModel(std::vector<Vertex> &vertices, std::vector<uint32_t> &indices) {
-    
+    // 1. create buffer for our model
+    createBuffer(m_vertexBuffer, vertices.size() * sizeof(Vertex), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, m_vertexAllocation, m_vertexAllocationInfo);
+    createBuffer(m_indexBuffer, indices.size() * sizeof(uint32_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, m_indexAllocation, m_indexAllocationInfo);
+
+    // 2. write to GPU memory via host-visible memory
+    memcpy(m_vertexAllocationInfo.pMappedData, vertices.data(), vertices.size() * sizeof(Vertex));
+    memcpy(m_indexAllocationInfo.pMappedData, indices.data(), indices.size() * sizeof(uint32_t));
 }
 
 void Renderer::createInstance(Window &window) {
@@ -539,16 +545,32 @@ void Renderer::createSyncObjects() {
     }
 }
 
-void Renderer::createBuffer() {
-    /*
+void Renderer::createBuffer(VkBuffer &buffer, VkDeviceSize size, VkBufferUsageFlagBits usage, VmaAllocation &allocation, VmaAllocationInfo &allocationInfo) {
     VkBufferCreateInfo bufferCreateInfo{
-        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .pNext = nullptr,
-        .flags = {},
-        .size  = 
+        .sType                 = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .pNext                 = nullptr,
+        .flags                 = {},
+        .size                  = size,
+        .usage                 = usage,
+        .sharingMode           = VK_SHARING_MODE_EXCLUSIVE,
+        .queueFamilyIndexCount = 0,  // last 2 parameters are ignored bec. no queue sharing
+        .pQueueFamilyIndices   = nullptr
     };
-    vmaCreateBuffer(m_allocator, )
-    */
+
+    // NOTE: .flags are used by HowToVulkan to allocate host-visible memory
+    VmaAllocationCreateInfo allocationCreateInfo{
+        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+        .usage = VMA_MEMORY_USAGE_AUTO,
+        .requiredFlags = {},
+        .preferredFlags = {},
+        .memoryTypeBits = {},
+        .pool           = {},
+        .pUserData      = {},
+        .priority       = 1,
+        .minAlignment   = {}
+    };
+
+    vmaCreateBuffer(m_allocator, &bufferCreateInfo, &allocationCreateInfo, &buffer, &allocation, &allocationInfo);
 }
 
 void Renderer::drawFrame(Window &window) {
@@ -795,6 +817,7 @@ void Renderer::checkResult(VkResult result, const char *errorMessage) const {
 
 void Renderer::cleanup() {
     vkDeviceWaitIdle(m_device);
+    vmaCleanup();
     syncObjectCleanup();
     vkDestroyCommandPool(m_device, m_commandPool, nullptr);
     vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
@@ -822,4 +845,9 @@ void Renderer::syncObjectCleanup() {
     for (int i : std::views::iota(0uz, m_swapchainImages.size())) {
         vkDestroySemaphore(m_device, m_renderFinishedSemaphores[i], nullptr);
     }
+}
+
+void Renderer::vmaCleanup() {
+    vmaDestroyBuffer(m_allocator, m_vertexBuffer, m_vertexAllocation);
+    vmaDestroyBuffer(m_allocator, m_indexBuffer, m_indexAllocation);
 }

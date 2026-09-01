@@ -1,11 +1,11 @@
 #pragma once
 #include "volk.h"
 #include "vk_mem_alloc.h"
+#include "ModelLoader/ModelLoader.h"  // IWYU pragma: keep
 #include <vector>
 #include <cstdint>
 #include <string>
 class Window;
-struct Vertex;
 
 class Renderer {
 public:
@@ -37,7 +37,12 @@ private:
     std::vector<VkSemaphore>     m_renderFinishedSemaphores{};
     uint32_t                     m_frameIndex              {};
     // model loading for Vulkan
-    VkBuffer                     m_buffer                  {VK_NULL_HANDLE};
+    VkBuffer                     m_vertexBuffer            {VK_NULL_HANDLE};
+    VmaAllocation                m_vertexAllocation        {VK_NULL_HANDLE};
+    VmaAllocationInfo            m_vertexAllocationInfo    {};
+    VkBuffer                     m_indexBuffer             {VK_NULL_HANDLE};
+    VmaAllocation                m_indexAllocation         {VK_NULL_HANDLE};
+    VmaAllocationInfo            m_indexAllocationInfo     {};
     // extensions
     std::vector<const char *>    m_requiredDeviceExtensions{
         VK_KHR_SWAPCHAIN_EXTENSION_NAME, 
@@ -56,7 +61,7 @@ private:
     void createCommandPool();
     void createCommandBuffers();
     void createSyncObjects();
-    void createBuffer();
+    void createBuffer(VkBuffer &buffer, VkDeviceSize size, VkBufferUsageFlagBits usage, VmaAllocation &allocation, VmaAllocationInfo &allocationInfo);
     void recreateSwapchain(Window &window);
 
     // Helper functions
@@ -64,4 +69,5 @@ private:
     void checkResult(VkResult result, const char *errorMessage) const;
     void swapchainCleanup();
     void syncObjectCleanup();
+    void vmaCleanup();
 };
