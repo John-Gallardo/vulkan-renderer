@@ -32,8 +32,20 @@ void Renderer::initVulkan(Window &window) {
 
 void Renderer::uploadModel(std::vector<Vertex> &vertices, std::vector<uint32_t> &indices) {
     // 1. create buffer for our model
-    createBuffer(m_vertexBuffer, vertices.size() * sizeof(Vertex), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, m_vertexAllocation, m_vertexAllocationInfo);
-    createBuffer(m_indexBuffer, indices.size() * sizeof(uint32_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, m_indexAllocation, m_indexAllocationInfo);
+    createBuffer(
+        m_vertexBuffer,
+        vertices.size() * sizeof(Vertex),
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        m_vertexAllocation,
+        m_vertexAllocationInfo
+    );
+    createBuffer(
+        m_indexBuffer,
+        indices.size() * sizeof(uint32_t),
+        VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        m_indexAllocation,
+        m_indexAllocationInfo
+    );
 
     // 2. write to GPU memory via host-visible memory
     memcpy(m_vertexAllocationInfo.pMappedData, vertices.data(), vertices.size() * sizeof(Vertex));
@@ -178,7 +190,7 @@ void Renderer::createDevice() {
 
 void Renderer::createAllocator() {
     VmaAllocatorCreateInfo allocatorCreateInfo{
-        .flags                          = {},
+        .flags                          = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
         .physicalDevice                 = m_physicalDevice,
         .device                         = m_device,
         .preferredLargeHeapBlockSize    = {},       // default = 256MB
@@ -545,7 +557,7 @@ void Renderer::createSyncObjects() {
     }
 }
 
-void Renderer::createBuffer(VkBuffer &buffer, VkDeviceSize size, VkBufferUsageFlagBits usage, VmaAllocation &allocation, VmaAllocationInfo &allocationInfo) {
+void Renderer::createBuffer(VkBuffer &buffer, VkDeviceSize size, VkBufferUsageFlags usage, VmaAllocation &allocation, VmaAllocationInfo &allocationInfo) {
     VkBufferCreateInfo bufferCreateInfo{
         .sType                 = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .pNext                 = nullptr,

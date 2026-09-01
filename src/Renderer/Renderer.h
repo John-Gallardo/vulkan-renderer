@@ -61,7 +61,7 @@ private:
     void createCommandPool();
     void createCommandBuffers();
     void createSyncObjects();
-    void createBuffer(VkBuffer &buffer, VkDeviceSize size, VkBufferUsageFlagBits usage, VmaAllocation &allocation, VmaAllocationInfo &allocationInfo);
+    void createBuffer(VkBuffer &buffer, VkDeviceSize size, VkBufferUsageFlags usage, VmaAllocation &allocation, VmaAllocationInfo &allocationInfo);
     void recreateSwapchain(Window &window);
 
     // Helper functions
