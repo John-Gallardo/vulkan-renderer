@@ -41,7 +41,9 @@ private:
     VkBuffer                     m_vertexBuffer            {VK_NULL_HANDLE};
     VmaAllocation                m_vertexAllocation        {VK_NULL_HANDLE};
     VmaAllocationInfo            m_vertexAllocationInfo    {};
+    VkDeviceAddress              m_vertexBufferAddress     {};
     VkBuffer                     m_indexBuffer             {VK_NULL_HANDLE};
+    uint32_t                     m_indexCount              {};
     VmaAllocation                m_indexAllocation         {VK_NULL_HANDLE};
     VmaAllocationInfo            m_indexAllocationInfo     {};
     // extensions

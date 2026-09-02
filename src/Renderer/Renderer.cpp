@@ -1,9 +1,13 @@
 #include "Renderer.h"
+#include "PushConstants.h"
 #include "Config.h"
 #include "Window/Window.h"
 #include "volk.h"
 #include "vk_mem_alloc.h"
 #include "Vertex.h"
+#include <glm/glm.hpp>
+#include <glm/ext/matrix_clip_space.hpp>
+#include <glm/ext/matrix_transform.hpp>
 #include <ranges>
 #include <string>
 #include <fstream>
@@ -15,6 +19,7 @@
 #include <queue>
 #include <print>
 #include <cstring>  // for memcpy
+#include <cmath>
 
 void Renderer::initVulkan(Window &window) {
     checkResult(volkInitialize(), "Error: failed to initialize Volk");
@@ -51,6 +56,15 @@ void Renderer::uploadModel(std::vector<Vertex> &vertices, std::vector<uint32_t> 
     // 2. write to GPU memory via host-visible memory
     memcpy(m_vertexAllocationInfo.pMappedData, vertices.data(), vertices.size() * sizeof(Vertex));
     memcpy(m_indexAllocationInfo.pMappedData, indices.data(), indices.size() * sizeof(uint32_t));
+
+    // 3. grab vertex address & index count for rendering later
+    VkBufferDeviceAddressInfo bufferDeviceAddressInfo{
+        .sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+        .pNext  = nullptr,
+        .buffer = m_vertexBuffer
+    };
+    m_vertexBufferAddress = vkGetBufferDeviceAddress(m_device, &bufferDeviceAddressInfo);
+    m_indexCount = static_cast<uint32_t>(indices.size());
 }
 
 void Renderer::createInstance(Window &window) {
@@ -145,17 +159,9 @@ void Renderer::createDevice() {
     };
 
     // structure chain for our used extensions & core features
-    VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures{
-        .sType                            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES,
-        .pNext                            = nullptr,
-        .bufferDeviceAddress              = VK_TRUE,
-        .bufferDeviceAddressCaptureReplay = VK_FALSE,
-        .bufferDeviceAddressMultiDevice   = VK_FALSE
-    };
-
     VkPhysicalDeviceUnifiedImageLayoutsFeaturesKHR unifiedImageLayoutsFeatures{
         .sType                    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_UNIFIED_IMAGE_LAYOUTS_FEATURES_KHR,
-        .pNext                    = &bufferDeviceAddressFeatures,
+        .pNext                    = nullptr,
         .unifiedImageLayouts      = VK_TRUE,
         .unifiedImageLayoutsVideo = VK_FALSE
     };
@@ -167,9 +173,19 @@ void Renderer::createDevice() {
         .shaderDrawParameters = VK_TRUE
     };
 
+    // NOTE: needed for shader
+    VkPhysicalDeviceVulkan12Features vulkan12Features{
+        .sType                            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+        .pNext                            = &vulkan11Features,
+        .scalarBlockLayout                = VK_TRUE,
+        .bufferDeviceAddress              = VK_TRUE,
+        .bufferDeviceAddressCaptureReplay = VK_FALSE,
+        .bufferDeviceAddressMultiDevice   = VK_FALSE
+    };
+
     VkPhysicalDeviceVulkan13Features vulkan13Features{
         .sType            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
-        .pNext            = &vulkan11Features,
+        .pNext            = &vulkan12Features,
         .synchronization2 = VK_TRUE,
         .dynamicRendering = VK_TRUE
     };
@@ -301,7 +317,7 @@ void Renderer::createImageViews() {
 void Renderer::createGraphicsPipeline() {
     // 1. Shader stage
     // create shader modules first
-    std::vector<char> shaderCode{readFile(PROJECT_ROOT_DIR "src/Shaders/triangle.spv")};
+    std::vector<char> shaderCode{readFile(PROJECT_ROOT_DIR "src/Shaders/shader.spv")};
     VkShaderModuleCreateInfo shaderModuleCreateInfo{
         .sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
         .pNext    = nullptr,
@@ -454,16 +470,23 @@ void Renderer::createGraphicsPipeline() {
     };
 
     // 9. Pipeline Layout
+    // TODO: add MVP matrices to push constants
+    VkPushConstantRange pushConstantRange{
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+        .offset     = 0,
+        .size       = 2 * sizeof(VkDeviceAddress)  // vertex buffer & world data
+    };
+
     VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo{
         .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .pNext                  = nullptr,
         .flags                  = {},
         .setLayoutCount         = 0,
         .pSetLayouts            = nullptr,
-        .pushConstantRangeCount = 0,
-        .pPushConstantRanges    = nullptr
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges    = &pushConstantRange
     };
-    vkCreatePipelineLayout(m_device, &pipelineLayoutCreateInfo, nullptr, &m_pipelineLayout);
+    checkResult(vkCreatePipelineLayout(m_device, &pipelineLayoutCreateInfo, nullptr, &m_pipelineLayout), "Error: failed to create pipeline layout");
 
     // 10. Dynamic Rendering
     VkPipelineRenderingCreateInfo renderingCreateInfo{
@@ -583,12 +606,12 @@ void Renderer::createBuffer(VkBuffer &buffer, VkDeviceSize size, VkBufferUsageFl
         .minAlignment   = {}
     };
 
-    vmaCreateBuffer(m_allocator, &bufferCreateInfo, &allocationCreateInfo, &buffer, &allocation, &allocationInfo);
+    checkResult(vmaCreateBuffer(m_allocator, &bufferCreateInfo, &allocationCreateInfo, &buffer, &allocation, &allocationInfo), "Error: failed to create buffer");
 }
 
 void Renderer::drawFrame(Window &window) {
     // 1. Wait for previous submission to finish rendering before we record commands
-    checkResult(vkWaitForFences(m_device, 1, &m_renderWaitFences[m_frameIndex], VK_TRUE, UINT64_MAX), "Error: failed to wait render wait fence");
+    checkResult(vkWaitForFences(m_device, 1, &m_renderWaitFences[m_frameIndex], VK_TRUE, UINT64_MAX), "Error: failed to wait for render wait fence");
 
     // 2. Record command buffer
     uint32_t imageIndex{};
@@ -698,7 +721,31 @@ void Renderer::drawFrame(Window &window) {
 
     vkCmdBindPipeline(m_commandBuffers[m_frameIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
 
-    vkCmdDraw(m_commandBuffers[m_frameIndex], 3, 1, 0, 0);
+    glm::mat4 projection{glm::perspective(
+        glm::radians(45.0f),
+        static_cast<float>(m_swapchainExtent.width) / m_swapchainExtent.height,
+        0.1f,
+        100.0f
+    )};
+    projection[1][1] *= -1;  // flip y projection because vulkan's Y is pointing down
+
+    PushConstants pushConstants{
+        .vertexBufferAddress = m_vertexBufferAddress,
+        .model               = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f)),
+        .view                = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f)),
+        .projection          = projection
+    };
+    vkCmdPushConstants(
+        m_commandBuffers[m_frameIndex],
+        m_pipelineLayout,
+        VK_SHADER_STAGE_VERTEX_BIT,
+        0,
+        sizeof(PushConstants),
+        &pushConstants
+    );
+
+    vkCmdBindIndexBuffer(m_commandBuffers[m_frameIndex], m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdDrawIndexed(m_commandBuffers[m_frameIndex], m_indexCount, 1, 0, 0, 0);
 
     vkCmdEndRendering(m_commandBuffers[m_frameIndex]);
 
