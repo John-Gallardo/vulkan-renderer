@@ -5,7 +5,9 @@
 #include <GLFW/glfw3.h>
 
 void Window::initWindow() {
+#ifndef NDEBUG
     glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
+#endif
     if (glfwInit() == GLFW_FALSE) {
         throw std::runtime_error("Error: Failed to initialize GLFW");
     }
