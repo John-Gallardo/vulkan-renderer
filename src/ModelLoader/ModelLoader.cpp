@@ -1,4 +1,5 @@
 #include "ModelLoader.h"
+#include "Vertex.h"
 #include <stdexcept>
 #include <assimp/Importer.hpp> 
 #include <assimp/scene.h>      
