@@ -35,14 +35,14 @@ void ModelLoader::loadModel(std::vector<Vertex> &vertices, std::vector<uint32_t>
         uint32_t vertexOffset{static_cast<uint32_t>(vertices.size())};  // store offset BEFORE adding this mesh's new vertices
         for (uint32_t j : std::views::iota(0u, mesh->mNumVertices)) {
             Vertex vertex{};
-            vertex.Position = {
+            vertex.position = {
                 mesh->mVertices[j].x,
                 mesh->mVertices[j].y,
                 mesh->mVertices[j].z
             };
 
             if (mesh->HasNormals()) {
-                vertex.Normal = {
+                vertex.normal = {
                     mesh->mNormals[j].x,
                     mesh->mNormals[j].y,
                     mesh->mNormals[j].z
