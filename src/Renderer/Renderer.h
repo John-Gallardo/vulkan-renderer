@@ -28,6 +28,10 @@ private:
     VkSurfaceFormatKHR           m_swapchainSurfaceFormat  {};
     std::vector<VkImage>         m_swapchainImages         {};
     std::vector<VkImageView>     m_swapchainImageViews     {};
+    // depth testing
+    VkImage                      m_depthImage              {VK_NULL_HANDLE};
+    VkImageView                  m_depthImageView          {VK_NULL_HANDLE};
+    VmaAllocation                m_depthImageAllocation    {VK_NULL_HANDLE};
     // pipeline & rendering
     VkPipelineLayout             m_pipelineLayout          {VK_NULL_HANDLE};
     VkPipeline                   m_graphicsPipeline        {VK_NULL_HANDLE};
@@ -60,6 +64,7 @@ private:
     void createSurface(Window &window);
     void createSwapchain(Window &window);
     void createImageViews();
+    void createDepthResources();
     void createGraphicsPipeline();
     void createCommandPool();
     void createCommandBuffers();

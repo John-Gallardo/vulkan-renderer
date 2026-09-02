@@ -20,6 +20,7 @@
 #include <print>
 #include <cstring>  // for memcpy
 #include <cmath>
+#include <array>
 
 void Renderer::initVulkan(Window &window) {
     checkResult(volkInitialize(), "Error: failed to initialize Volk");
@@ -30,6 +31,7 @@ void Renderer::initVulkan(Window &window) {
     createSurface(window);
     createSwapchain(window);
     createImageViews();
+    createDepthResources();
     createGraphicsPipeline();
     createCommandPool();
     createCommandBuffers();
@@ -314,6 +316,49 @@ void Renderer::createImageViews() {
     }
 }
 
+void Renderer::createDepthResources() {
+    VkImageCreateInfo imageCreateInfo{
+        .sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .pNext         = nullptr,
+        .flags         = {},
+        .imageType     = VK_IMAGE_TYPE_2D,
+        .format        = VK_FORMAT_D32_SFLOAT,
+        .extent        = {m_swapchainExtent.width, m_swapchainExtent.height, 1},
+        .mipLevels     = 1,
+        .arrayLayers   = 1,
+        .samples       = VK_SAMPLE_COUNT_1_BIT,
+        .tiling        = VK_IMAGE_TILING_OPTIMAL,
+        .usage         = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+        .sharingMode   = VK_SHARING_MODE_EXCLUSIVE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
+    };
+
+    VmaAllocationCreateInfo allocationCreateInfo{
+        .usage = VMA_MEMORY_USAGE_AUTO
+    };
+
+    checkResult(vmaCreateImage(m_allocator, &imageCreateInfo, &allocationCreateInfo, &m_depthImage, &m_depthImageAllocation, nullptr), "Error: failed to create depth image");
+
+    VkImageViewCreateInfo imageViewCreateInfo{
+        .sType      = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .pNext      = nullptr,
+        .flags      = {},
+        .image      = m_depthImage,
+        .viewType   = VK_IMAGE_VIEW_TYPE_2D,
+        .format     = VK_FORMAT_D32_SFLOAT,
+        .components = {},
+        .subresourceRange = {
+            .aspectMask     = VK_IMAGE_ASPECT_DEPTH_BIT,
+            .baseMipLevel   = 0,
+            .levelCount     = 1,
+            .baseArrayLayer = 0,
+            .layerCount     = 1
+        }
+    };
+
+    checkResult(vkCreateImageView(m_device, &imageViewCreateInfo, nullptr, &m_depthImageView), "Error: failed to create depth image view");
+}
+
 void Renderer::createGraphicsPipeline() {
     // 1. Shader stage
     // create shader modules first
@@ -416,8 +461,8 @@ void Renderer::createGraphicsPipeline() {
         .sType                 = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
         .pNext                 = nullptr,
         .flags                 = {},
-        .depthTestEnable       = VK_FALSE,
-        .depthWriteEnable      = VK_FALSE,
+        .depthTestEnable       = VK_TRUE,
+        .depthWriteEnable      = VK_TRUE,
         .depthCompareOp        = VK_COMPARE_OP_LESS,
         .depthBoundsTestEnable = VK_FALSE,
         .stencilTestEnable     = VK_FALSE,
@@ -470,11 +515,10 @@ void Renderer::createGraphicsPipeline() {
     };
 
     // 9. Pipeline Layout
-    // TODO: add MVP matrices to push constants
     VkPushConstantRange pushConstantRange{
         .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
         .offset     = 0,
-        .size       = 2 * sizeof(VkDeviceAddress)  // vertex buffer & world data
+        .size       = sizeof(PushConstants)
     };
 
     VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo{
@@ -495,7 +539,7 @@ void Renderer::createGraphicsPipeline() {
         .viewMask                = {},
         .colorAttachmentCount    = 1,
         .pColorAttachmentFormats = &m_swapchainSurfaceFormat.format,
-        .depthAttachmentFormat   = {},
+        .depthAttachmentFormat   = VK_FORMAT_D32_SFLOAT,
         .stencilAttachmentFormat = {}
     };
 
@@ -633,7 +677,7 @@ void Renderer::drawFrame(Window &window) {
     };
     checkResult(vkBeginCommandBuffer(m_commandBuffers[m_frameIndex], &commandBufferBeginInfo), "Error: failed to begin command buffer");
 
-    // Transition for rendering
+    // Transition swapchain image & depth image for rendering
     VkImageMemoryBarrier2 imageMemoryBarrier{
         .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
         .pNext               = nullptr,
@@ -655,6 +699,27 @@ void Renderer::drawFrame(Window &window) {
         }
     }; 
 
+    VkImageMemoryBarrier2 depthImageMemoryBarrier{
+        .sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .pNext         = nullptr,
+        .srcStageMask  = VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+        .srcAccessMask = {},
+        .dstStageMask  = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
+        .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+        .oldLayout     = VK_IMAGE_LAYOUT_UNDEFINED,
+        .newLayout     = VK_IMAGE_LAYOUT_GENERAL,
+        .image         = m_depthImage,
+        .subresourceRange = {
+            .aspectMask     = VK_IMAGE_ASPECT_DEPTH_BIT,
+            .baseMipLevel   = 0,
+            .levelCount     = 1,
+            .baseArrayLayer = 0,
+            .layerCount     = 1
+        }
+    };
+
+    std::array<VkImageMemoryBarrier2, 2> imageMemoryBarriers{imageMemoryBarrier, depthImageMemoryBarrier};
+
     VkDependencyInfo dependencyInfo{
         .sType                    = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
         .pNext                    = nullptr,
@@ -663,8 +728,8 @@ void Renderer::drawFrame(Window &window) {
         .pMemoryBarriers          = nullptr,
         .bufferMemoryBarrierCount = 0,
         .pBufferMemoryBarriers    = nullptr,
-        .imageMemoryBarrierCount  = 1,
-        .pImageMemoryBarriers     = &imageMemoryBarrier
+        .imageMemoryBarrierCount  = static_cast<uint32_t>(imageMemoryBarriers.size()),
+        .pImageMemoryBarriers     = imageMemoryBarriers.data()
     };
     vkCmdPipelineBarrier2(m_commandBuffers[m_frameIndex], &dependencyInfo);
 
@@ -680,7 +745,22 @@ void Renderer::drawFrame(Window &window) {
         .loadOp             = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp            = VK_ATTACHMENT_STORE_OP_STORE,
         .clearValue         = {
-            .color        = {0.0f, 0.0f, 0.0f, 1.0f},
+            .color = {0.0f, 0.0f, 0.0f, 1.0f},
+        }
+    };
+
+    VkRenderingAttachmentInfo depthAttachmentInfo{
+        .sType              = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .pNext              = nullptr,
+        .imageView          = m_depthImageView,
+        .imageLayout        = VK_IMAGE_LAYOUT_GENERAL,
+        .resolveMode        = {},
+        .resolveImageView   = VK_NULL_HANDLE,
+        .resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .loadOp             = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp            = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .clearValue         = {
+            .depthStencil = {1.0f, 0}
         }
     };
 
@@ -696,7 +776,7 @@ void Renderer::drawFrame(Window &window) {
         .viewMask             = {},
         .colorAttachmentCount = 1,
         .pColorAttachments    = &colorAttachmentInfo,
-        .pDepthAttachment     = nullptr,
+        .pDepthAttachment     = &depthAttachmentInfo,
         .pStencilAttachment   = nullptr,
     };
 
@@ -729,9 +809,11 @@ void Renderer::drawFrame(Window &window) {
     )};
     projection[1][1] *= -1;  // flip y projection because vulkan's Y is pointing down
 
+    // NOTE: scale down & translate down so you can actually see the model
+    glm::mat4 model{glm::translate(glm::scale(glm::mat4(1.0f), glm::vec3(0.01f)), glm::vec3(0.0f, -100.0f, 0.0f))};
     PushConstants pushConstants{
         .vertexBufferAddress = m_vertexBufferAddress,
-        .model               = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f)),
+        .model               = model,
         .view                = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f)),
         .projection          = projection
     };
@@ -853,6 +935,9 @@ void Renderer::recreateSwapchain(Window &window) {
     swapchainCleanup();
     createSwapchain(window);
     createImageViews();
+    vkDestroyImageView(m_device, m_depthImageView, nullptr);
+    vmaDestroyImage(m_allocator, m_depthImage, m_depthImageAllocation);
+    createDepthResources();
 }
 
 std::vector<char> Renderer::readFile(const std::string &filename) {
@@ -877,6 +962,8 @@ void Renderer::checkResult(VkResult result, const char *errorMessage) const {
 
 void Renderer::cleanup() {
     vkDeviceWaitIdle(m_device);
+    vkDestroyImageView(m_device, m_depthImageView, nullptr);
+    vmaDestroyImage(m_allocator, m_depthImage, m_depthImageAllocation);
     vmaCleanup();
     syncObjectCleanup();
     vkDestroyCommandPool(m_device, m_commandPool, nullptr);
