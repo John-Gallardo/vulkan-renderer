@@ -3,6 +3,7 @@
 #include "Window/Window.h"
 #include "Input/Input.h"
 #include "ModelLoader/ModelLoader.h"
+#include "Vertex.h"
 #include <cstdint>
 #include <vector>
 

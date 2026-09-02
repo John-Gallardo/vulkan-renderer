@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <string>
 class Window;
+struct Vertex;
 
 class Renderer {
 public:

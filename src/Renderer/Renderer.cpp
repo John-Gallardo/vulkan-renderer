@@ -3,6 +3,7 @@
 #include "Window/Window.h"
 #include "volk.h"
 #include "vk_mem_alloc.h"
+#include "Vertex.h"
 #include <ranges>
 #include <string>
 #include <fstream>
