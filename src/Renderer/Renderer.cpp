@@ -703,7 +703,7 @@ void Renderer::drawFrame(Window &window) {
     VkImageMemoryBarrier2 depthImageMemoryBarrier{
         .sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
         .pNext         = nullptr,
-        .srcStageMask  = VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+        .srcStageMask  = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
         .srcAccessMask = {},
         .dstStageMask  = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
         .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
@@ -954,12 +954,32 @@ void Renderer::processCameraMovement(Window &window, float deltaTime) {
         m_cameraPos += glm::normalize(glm::cross(m_cameraFront, m_cameraUp)) * cameraSpeed;
 }
 
-void Renderer::updateCameraVectors() {
-    /*
-    glm::vec3 front{
-        cos(glm::radians)
+void Renderer::processMouseMovement(float xPos, float yPos) {
+    if (m_firstMouse) {
+        m_lastMouseX = xPos;
+        m_lastMouseY = yPos;
+        m_firstMouse = false;
     }
-    */
+
+    float xOffset{xPos - m_lastMouseX};
+    float yOffset{m_lastMouseY - yPos};  // reversed bec. +Y = down in Vulkan
+    m_lastMouseX = xPos;
+    m_lastMouseY = yPos;
+
+    constexpr float sensitivity{0.05f};
+    xOffset *= sensitivity;
+    yOffset *= sensitivity;
+
+    m_cameraYaw += xOffset;
+    m_cameraPitch += yOffset;
+    m_cameraPitch = std::clamp(m_cameraPitch, -89.0f, 89.0f);
+
+    glm::vec3 front{
+        cos(glm::radians(m_cameraYaw)) * cos(glm::radians(m_cameraPitch)),
+        sin(glm::radians(m_cameraPitch)),
+        sin(glm::radians(m_cameraYaw)) * cos(glm::radians(m_cameraPitch))
+    };
+    m_cameraFront = glm::normalize(front);
 }
 
 std::vector<char> Renderer::readFile(const std::string &filename) {

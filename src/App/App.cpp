@@ -5,6 +5,8 @@
 
 void App::run() {
     m_window.initWindow();
+    m_window.captureCursor();
+    m_window.setupMouseCallback(m_renderer);
     m_renderer.initVulkan(m_window);
     m_modelLoader.loadModel(m_vertices, m_indices);
     m_renderer.uploadModel(m_vertices, m_indices);

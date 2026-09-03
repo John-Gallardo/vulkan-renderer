@@ -1,5 +1,6 @@
 #include "volk.h"
 #include "Window.h"
+#include "Renderer/Renderer.h"
 #include "Config.h"
 #include <stdexcept>
 #include <GLFW/glfw3.h>
@@ -38,6 +39,20 @@ void Window::pollEvents() {
 
 float Window::getTime() {
     return static_cast<float>(glfwGetTime());
+}
+
+void Window::captureCursor() {
+    glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+}
+
+void Window::setupMouseCallback(Renderer &renderer) {
+    glfwSetWindowUserPointer(m_window, &renderer);
+    glfwSetCursorPosCallback(m_window, mouseCallback);
+}
+
+void Window::mouseCallback(GLFWwindow *window, double xPos, double yPos) {
+    auto *renderer{static_cast<Renderer *>(glfwGetWindowUserPointer(window))};
+    renderer->processMouseMovement(static_cast<float>(xPos), static_cast<float>(yPos));
 }
 
 InstanceExtensionInfo Window::getRequiredInstanceExtensions() const {
