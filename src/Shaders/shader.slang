@@ -25,7 +25,7 @@ PushConstants pushConstants;
 const static float g_ambientStrength = 0.1;
 // TODO: sample texture for light color later
 const static float3 g_lightColor = {0.5, 0.5, 0.5};
-const static float4 g_lightPos = {0.0, -10.0, 10.0, 1.0};
+const static float4 g_lightPos = {0.0, 10.0, 10.0, 1.0};
 const static float g_shininess = 32.0;
 const static float g_specularStrength = 0.5;
 
@@ -50,7 +50,7 @@ VertexOutput vertexMain(uint vertexIndex: SV_VertexID) {
 
 [shader("fragment")]
 float4 fragmentMain(VertexOutput vertex) : SV_Target {
-    // Phong lighting
+    // Blinn-Phong lighting
     float3 normal = normalize(vertex.normal);
     float3 lightDir = normalize(vertex.lightDir);
     float3 viewDir = normalize(vertex.viewDir);
@@ -63,8 +63,8 @@ float4 fragmentMain(VertexOutput vertex) : SV_Target {
     float3 diffuse = diffuseFactor * g_lightColor;
 
     // 3. specular factor
-    float3 reflectDir = reflect(-lightDir, normal);
-    float specularFactor = pow(max(dot(viewDir, reflectDir), 0.0), g_shininess);
+    float3 halfwayDir = normalize(lightDir + viewDir);
+    float specularFactor = pow(max(dot(normal, halfwayDir), 0.0), g_shininess);
     float3 specular = g_specularStrength * specularFactor * g_lightColor;
 
     float3 result = ambient + specular + diffuse;
