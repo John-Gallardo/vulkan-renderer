@@ -14,8 +14,13 @@ void App::run() {
 
 void App::mainLoop() {
     while (!m_window.shouldClose()) {
+        float currentFrame{m_window.getTime()};
+        m_deltaTime = currentFrame - m_lastFrame;
+        m_lastFrame = currentFrame;
+
         m_window.pollEvents();
         m_input.processUserInput(m_window);
+        m_renderer.processCameraMovement(m_window, m_deltaTime);
         m_renderer.drawFrame(m_window);
     }
 }

@@ -19,6 +19,7 @@ public:
     bool isKeyPressed(int key) const;
     void closeWindow();
     void pollEvents();
+    float getTime();
     InstanceExtensionInfo getRequiredInstanceExtensions() const;
     void createWindowSurface(VkInstance instance, const VkAllocationCallbacks *allocator, VkSurfaceKHR *surface);
     FramebufferSize getFramebufferSize();

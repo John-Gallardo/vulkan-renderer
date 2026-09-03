@@ -36,6 +36,10 @@ void Window::pollEvents() {
     glfwPollEvents();
 }
 
+float Window::getTime() {
+    return static_cast<float>(glfwGetTime());
+}
+
 InstanceExtensionInfo Window::getRequiredInstanceExtensions() const {
     uint32_t glfwExtensionCount{};
     const char **glfwExtensions{glfwGetRequiredInstanceExtensions(&glfwExtensionCount)};

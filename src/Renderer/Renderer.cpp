@@ -5,6 +5,7 @@
 #include "volk.h"
 #include "vk_mem_alloc.h"
 #include "Vertex.h"
+#include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_transform.hpp>
@@ -807,14 +808,14 @@ void Renderer::drawFrame(Window &window) {
         0.1f,
         100.0f
     )};
-    projection[1][1] *= -1;  // flip y projection because vulkan's Y is pointing down
+    projection[1][1] *= -1;  // flip y projection because vulkan's +Y is pointing down
 
     // NOTE: scale down & translate down so you can actually see the model
     glm::mat4 model{glm::translate(glm::scale(glm::mat4(1.0f), glm::vec3(0.01f)), glm::vec3(0.0f, -100.0f, 0.0f))};
     PushConstants pushConstants{
         .vertexBufferAddress = m_vertexBufferAddress,
         .model               = model,
-        .view                = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f)),
+        .view                = glm::lookAt(m_cameraPos, m_cameraPos + m_cameraFront, m_cameraUp),
         .projection          = projection
     };
     vkCmdPushConstants(
@@ -938,6 +939,27 @@ void Renderer::recreateSwapchain(Window &window) {
     vkDestroyImageView(m_device, m_depthImageView, nullptr);
     vmaDestroyImage(m_allocator, m_depthImage, m_depthImageAllocation);
     createDepthResources();
+}
+
+void Renderer::processCameraMovement(Window &window, float deltaTime) {
+    // NOTE: reference is learnOpenGL's camera chapter
+    const float cameraSpeed{2.5f * deltaTime};
+    if (window.isKeyPressed(GLFW_KEY_W))
+        m_cameraPos += cameraSpeed * m_cameraFront;
+    if (window.isKeyPressed(GLFW_KEY_S))
+        m_cameraPos -= cameraSpeed * m_cameraFront;
+    if (window.isKeyPressed(GLFW_KEY_A))
+        m_cameraPos -= glm::normalize(glm::cross(m_cameraFront, m_cameraUp)) * cameraSpeed;
+    if (window.isKeyPressed(GLFW_KEY_D))
+        m_cameraPos += glm::normalize(glm::cross(m_cameraFront, m_cameraUp)) * cameraSpeed;
+}
+
+void Renderer::updateCameraVectors() {
+    /*
+    glm::vec3 front{
+        cos(glm::radians)
+    }
+    */
 }
 
 std::vector<char> Renderer::readFile(const std::string &filename) {

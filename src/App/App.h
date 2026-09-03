@@ -18,6 +18,8 @@ private:
     ModelLoader           m_modelLoader{};
     std::vector<Vertex>   m_vertices{};
     std::vector<uint32_t> m_indices{};
+    float                 m_deltaTime{0.0f};
+    float                 m_lastFrame{0.0f};
 
     void mainLoop();
     void cleanup();
