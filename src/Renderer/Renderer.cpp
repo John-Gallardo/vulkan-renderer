@@ -169,21 +169,21 @@ void Renderer::createDevice() {
         .unifiedImageLayoutsVideo = VK_FALSE
     };
 
-    // NOTE: shaderDrawParameters was needed for triangle.spv
     VkPhysicalDeviceVulkan11Features vulkan11Features{
         .sType                = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
         .pNext                = &unifiedImageLayoutsFeatures,
         .shaderDrawParameters = VK_TRUE
     };
 
-    // NOTE: needed for shader
     VkPhysicalDeviceVulkan12Features vulkan12Features{
-        .sType                            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
-        .pNext                            = &vulkan11Features,
-        .scalarBlockLayout                = VK_TRUE,
-        .bufferDeviceAddress              = VK_TRUE,
-        .bufferDeviceAddressCaptureReplay = VK_FALSE,
-        .bufferDeviceAddressMultiDevice   = VK_FALSE
+        .sType                                     = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+        .pNext                                     = &vulkan11Features,
+        .descriptorIndexing                        = VK_TRUE,
+        .shaderSampledImageArrayNonUniformIndexing = VK_TRUE,
+        .descriptorBindingPartiallyBound           = VK_TRUE,  // NOTE: we are hard-coding the number of descriptors. not all are used
+        .runtimeDescriptorArray                    = VK_TRUE,
+        .scalarBlockLayout                         = VK_TRUE,
+        .bufferDeviceAddress                       = VK_TRUE,
     };
 
     VkPhysicalDeviceVulkan13Features vulkan13Features{
@@ -193,9 +193,15 @@ void Renderer::createDevice() {
         .dynamicRendering = VK_TRUE
     };
 
+    VkPhysicalDeviceVulkan14Features vulkan14Features{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
+        .pNext = &vulkan13Features,
+        .hostImageCopy = VK_TRUE,
+    };
+
     VkDeviceCreateInfo deviceCreateInfo{
         .sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        .pNext                   = &vulkan13Features,
+        .pNext                   = &vulkan14Features,
         .queueCreateInfoCount    = 1,
         .pQueueCreateInfos       = &queueCreateInfo,
         .enabledExtensionCount   = static_cast<uint32_t>(m_requiredDeviceExtensions.size()),
@@ -652,6 +658,17 @@ void Renderer::createBuffer(VkBuffer &buffer, VkDeviceSize size, VkBufferUsageFl
     };
 
     checkResult(vmaCreateBuffer(m_allocator, &bufferCreateInfo, &allocationCreateInfo, &buffer, &allocation, &allocationInfo), "Error: failed to create buffer");
+}
+
+void Renderer::createDescriptorSets() {
+    VkDescriptorSetLayoutBinding textureBinding{
+        .binding            = 0,
+        .descriptorType     = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .descriptorCount    = Config::maxBindlessTextures,  // NOTE: hardcoded for simplicity
+        .stageFlags         = VK_SHADER_STAGE_FRAGMENT_BIT,
+        .pImmutableSamplers = nullptr
+    };
+
 }
 
 void Renderer::drawFrame(Window &window) {
