@@ -16,7 +16,7 @@
 - Synchronization using semaphores, fences, and synchronization barriers
 
 ## Video Demo
-
+[![Vulkan Renderer Demo](https://img.youtube.com/vi/bJ2ZzNgNC3E/hqdefault.jpg)](https://youtu.be/bJ2ZzNgNC3E)
 
 
 ## Requirements 
