@@ -13,7 +13,7 @@
 - Buffer device addresses passed in via push constants
 - Alpha-tested transparency on the shader side for textured materials (eg. Cloud's hair)
 - Direct texture uploads using Vulkan host image copy
-- Synchronization using semaphores, fences, and synchronization barriers
+- Synchronization using semaphores, fences, and pipeline barriers
 
 ## Video Demo
 [![Vulkan Renderer Demo](https://img.youtube.com/vi/bJ2ZzNgNC3E/hqdefault.jpg)](https://youtu.be/bJ2ZzNgNC3E)
