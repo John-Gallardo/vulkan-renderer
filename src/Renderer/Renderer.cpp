@@ -671,7 +671,7 @@ void Renderer::createGraphicsPipeline() {
 
     // 9. Pipeline Layout
     VkPushConstantRange pushConstantRange{
-        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
         .offset     = 0,
         .size       = sizeof(PushConstants)
     };
@@ -1038,6 +1038,17 @@ void Renderer::drawFrame(Window &window) {
 
     vkCmdBindPipeline(m_commandBuffers[m_frameIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
 
+    vkCmdBindDescriptorSets(
+        m_commandBuffers[m_frameIndex],
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        m_pipelineLayout,
+        0,
+        1,
+        &m_descriptorSet,
+        0,
+        nullptr
+    );
+
     glm::mat4 projection{glm::perspective(
         glm::radians(45.0f),
         static_cast<float>(m_swapchainExtent.width) / m_swapchainExtent.height,
@@ -1049,15 +1060,16 @@ void Renderer::drawFrame(Window &window) {
     // NOTE: scale down & translate down so you can actually see the model
     glm::mat4 model{glm::translate(glm::scale(glm::mat4(1.0f), glm::vec3(0.01f)), glm::vec3(0.0f, -100.0f, 0.0f))};
     PushConstants pushConstants{
-        .vertexBufferAddress = m_vertexBufferAddress,
-        .model               = model,
-        .view                = glm::lookAt(m_cameraPos, m_cameraPos + m_cameraFront, m_cameraUp),
-        .projection          = projection
+        .materialBufferAddress = m_materialBufferAddress,
+        .vertexBufferAddress   = m_vertexBufferAddress,
+        .model                 = model,
+        .view                  = glm::lookAt(m_cameraPos, m_cameraPos + m_cameraFront, m_cameraUp),
+        .projection            = projection
     };
     vkCmdPushConstants(
         m_commandBuffers[m_frameIndex],
         m_pipelineLayout,
-        VK_SHADER_STAGE_VERTEX_BIT,
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
         0,
         sizeof(PushConstants),
         &pushConstants
@@ -1240,6 +1252,7 @@ void Renderer::checkResult(VkResult result, const char *errorMessage) const {
 
 void Renderer::cleanup() {
     vkDeviceWaitIdle(m_device);
+    vkDestroySampler(m_device, m_textureSampler, nullptr);
     for (VkImageView imageView : m_textureImageViews) {
         vkDestroyImageView(m_device, imageView, nullptr);
     }
@@ -1280,6 +1293,7 @@ void Renderer::syncObjectCleanup() {
 void Renderer::vmaCleanup() {
     vmaDestroyBuffer(m_allocator, m_vertexBuffer, m_vertexAllocation);
     vmaDestroyBuffer(m_allocator, m_indexBuffer, m_indexAllocation);
+    vmaDestroyBuffer(m_allocator, m_materialBuffer, m_materialAllocation);
 
     for (int i : std::views::iota(0uz, m_textureImages.size())) {
         vmaDestroyImage(m_allocator, m_textureImages[i], m_textureAllocations[i]);
