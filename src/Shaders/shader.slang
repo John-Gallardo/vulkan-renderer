@@ -1,3 +1,6 @@
+[[vk::binding(0, 0)]]
+Sampler2D g_textures[];
+
 struct Vertex{
     float3 position;
     float3 normal;
@@ -5,7 +8,13 @@ struct Vertex{
     uint32_t materialIndex;
 };
 
+struct Material{
+    uint albedoIndex;
+    uint normalIndex;
+};
+
 struct PushConstants{
+    Material *materialBuffer;
     Vertex *vertexBuffer;
     float4x4 model;
     float4x4 view;
@@ -18,13 +27,14 @@ struct VertexOutput{
     float2 texCoord;
     float3 lightDir;
     float3 viewDir;
+    nointerpolation uint materialIndex;
 };
 
 [[vk::push_constant]]
 PushConstants pushConstants;
 
+const static uint g_invalidTextureIndex = 0xFFFFFFFF;
 const static float g_ambientStrength = 0.1;
-// TODO: sample texture for light color later
 const static float3 g_lightColor = {0.5, 0.5, 0.5};
 const static float4 g_lightPos = {0.0, 1000.0, 10.0, 1.0};
 const static float g_shininess = 32.0;
@@ -46,22 +56,30 @@ VertexOutput vertexMain(uint vertexIndex: SV_VertexID) {
     output.texCoord = vertex.texCoord;
     output.lightDir = g_lightPos.xyz - worldPos.xyz;
     output.viewDir  = -viewPos.xyz;
+    output.materialIndex = vertex.materialIndex;
     return output;
 }
 
 [shader("fragment")]
 float4 fragmentMain(VertexOutput vertex) : SV_Target {
+    Material material = pushConstants.materialBuffer[vertex.materialIndex];
+
+    float3 albedo = float3(1.0, 1.0, 1.0);
+    if (material.albedoIndex != g_invalidTextureIndex) {
+        albedo = g_textures[NonUniformResourceIndex(material.albedoIndex)].Sample(vertex.texCoord).rgb;
+    }
+
     // Blinn-Phong lighting
     float3 normal = normalize(vertex.normal);
     float3 lightDir = normalize(vertex.lightDir);
     float3 viewDir = normalize(vertex.viewDir);
 
     // 1. ambient factor
-    float3 ambient = g_ambientStrength * g_lightColor;
+    float3 ambient = g_ambientStrength * g_lightColor * albedo;
 
     // 2. diffuse factor
     float diffuseFactor = max(dot(normal, lightDir), 0.0);
-    float3 diffuse = diffuseFactor * g_lightColor;
+    float3 diffuse = diffuseFactor * g_lightColor * albedo;
 
     // 3. specular factor
     float3 halfwayDir = normalize(lightDir + viewDir);
