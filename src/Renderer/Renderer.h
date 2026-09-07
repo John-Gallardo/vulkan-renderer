@@ -13,6 +13,7 @@ public:
     void initVulkan(Window &window);
     void drawFrame(Window &window);  // for potential swapchain recreation
     void uploadModel(std::vector<Vertex> &vertices, std::vector<uint32_t> &indices);
+    uint32_t uploadTexture(const char *path, VkFormat format);
     // NOTE: these two probably should be in the Input class but I am too lazy at this point
     void processCameraMovement(Window &window, float deltaTime);  
     void processMouseMovement(float xPos, float yPos);
@@ -53,6 +54,17 @@ private:
     uint32_t                     m_indexCount              {};
     VmaAllocation                m_indexAllocation         {VK_NULL_HANDLE};
     VmaAllocationInfo            m_indexAllocationInfo     {};
+    // model descriptors
+    VkDescriptorSetLayout        m_descriptorSetLayout     {VK_NULL_HANDLE};
+    VkDescriptorPool             m_descriptorPool          {VK_NULL_HANDLE};
+    VkDescriptorSet              m_descriptorSet           {VK_NULL_HANDLE};
+    // textures
+    VkSampler                    m_textureSampler          {VK_NULL_HANDLE};
+    std::vector<VkImage>         m_textureImages           {};
+    std::vector<VmaAllocation>   m_textureAllocations      {};
+    std::vector<VkImageView>     m_textureImageViews       {};
+
+
     // camera
     glm::vec3                    m_cameraPos               {0.0f, 0.0f, 3.0f};
     glm::vec3                    m_cameraFront             {0.0f, 0.0f, -1.0f};
@@ -81,7 +93,8 @@ private:
     void createCommandBuffers();
     void createSyncObjects();
     void createBuffer(VkBuffer &buffer, VkDeviceSize size, VkBufferUsageFlags usage, VmaAllocation &allocation, VmaAllocationInfo &allocationInfo);
-    void createDescriptorSets();
+    void createDescriptorSet();
+    void createTextureSampler();
     void recreateSwapchain(Window &window);
 
     // Helper functions

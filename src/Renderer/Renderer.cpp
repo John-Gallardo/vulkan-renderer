@@ -4,6 +4,7 @@
 #include "Window/Window.h"
 #include "volk.h"
 #include "vk_mem_alloc.h"
+#include "stb_image.h"
 #include "Vertex.h"
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
@@ -33,6 +34,7 @@ void Renderer::initVulkan(Window &window) {
     createSwapchain(window);
     createImageViews();
     createDepthResources();
+    createDescriptorSet();
     createGraphicsPipeline();
     createCommandPool();
     createCommandBuffers();
@@ -68,6 +70,131 @@ void Renderer::uploadModel(std::vector<Vertex> &vertices, std::vector<uint32_t> 
     };
     m_vertexBufferAddress = vkGetBufferDeviceAddress(m_device, &bufferDeviceAddressInfo);
     m_indexCount = static_cast<uint32_t>(indices.size());
+}
+
+uint32_t Renderer::uploadTexture(const char *path, VkFormat format) {
+    int width{}, height{}, channels{};
+    stbi_uc *pixels{stbi_load(path, &width, &height, &channels, STBI_rgb_alpha)};
+    if (pixels == nullptr) {
+        throw std::runtime_error(std::format("Error: failed to load texture: {}", path));
+    }
+
+    // 1. Create image for our texture
+    VkImageCreateInfo imageCreateInfo{
+        .sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .pNext         = nullptr,
+        .flags         = {},
+        .imageType     = VK_IMAGE_TYPE_2D,
+        .format        = format,
+        .extent        = {static_cast<uint32_t>(width), static_cast<uint32_t>(height), 1},
+        .mipLevels     = 1,
+        .arrayLayers   = 1,
+        .samples       = VK_SAMPLE_COUNT_1_BIT,
+        .tiling        = VK_IMAGE_TILING_OPTIMAL,
+        .usage         = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_HOST_TRANSFER_BIT,
+        .sharingMode   = VK_SHARING_MODE_EXCLUSIVE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
+    };
+
+    VmaAllocationCreateInfo allocationCreateInfo{
+        .usage = VMA_MEMORY_USAGE_AUTO
+    };
+
+    VkImage image{VK_NULL_HANDLE};
+    VmaAllocation allocation{VK_NULL_HANDLE};
+    checkResult(vmaCreateImage(m_allocator, &imageCreateInfo, &allocationCreateInfo, &image, &allocation, nullptr), "Error: failed to create texture image");
+
+    // 2. Transition image layout and do a host copy
+    VkHostImageLayoutTransitionInfo transitionInfo{
+        .sType            = VK_STRUCTURE_TYPE_HOST_IMAGE_LAYOUT_TRANSITION_INFO,
+        .pNext            = nullptr,
+        .image            = image,
+        .oldLayout        = VK_IMAGE_LAYOUT_UNDEFINED,
+        .newLayout        = VK_IMAGE_LAYOUT_GENERAL,
+        .subresourceRange = {
+            .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel   = 0,
+            .levelCount     = 1,
+            .baseArrayLayer = 0,
+            .layerCount     = 1
+        }
+    };
+    checkResult(vkTransitionImageLayout(m_device, 1, &transitionInfo), "Error: failed to transition texture image");
+
+    VkMemoryToImageCopy region{
+        .sType             = VK_STRUCTURE_TYPE_MEMORY_TO_IMAGE_COPY,
+        .pNext             = nullptr,
+        .pHostPointer      = pixels,
+        .memoryRowLength   = 0,
+        .memoryImageHeight = 0,
+        .imageSubresource  = {
+            .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+            .mipLevel       = 0,
+            .baseArrayLayer = 0,
+            .layerCount     = 1
+        },
+        .imageOffset       = {0, 0, 0},
+        .imageExtent       = {static_cast<uint32_t>(width), static_cast<uint32_t>(height), 1}
+    };
+
+    VkCopyMemoryToImageInfo copyInfo{
+        .sType          = VK_STRUCTURE_TYPE_COPY_MEMORY_TO_IMAGE_INFO,
+        .pNext          = nullptr,
+        .flags          = {},
+        .dstImage       = image,
+        .dstImageLayout = VK_IMAGE_LAYOUT_GENERAL,
+        .regionCount    = 1,
+        .pRegions       = &region
+    };
+    checkResult(vkCopyMemoryToImage(m_device, &copyInfo), "Error: failed to copy texture data to image");
+
+    stbi_image_free(pixels);
+
+    // 3. Create an image view for our texture
+    VkImageViewCreateInfo imageViewCreateInfo{
+        .sType            = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .pNext            = nullptr,
+        .flags            = {},
+        .image            = image,
+        .viewType         = VK_IMAGE_VIEW_TYPE_2D,
+        .format           = format,
+        .components       = {},
+        .subresourceRange = {
+            .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel   = 0,
+            .levelCount     = 1,
+            .baseArrayLayer = 0,
+            .layerCount     = 1,
+        }
+    };
+    VkImageView imageView{VK_NULL_HANDLE};
+    checkResult(vkCreateImageView(m_device, &imageViewCreateInfo, nullptr, &imageView), "Error: failed to create image view for texture image");
+
+    // 4. Write into bindless array at the current free slot
+    static uint32_t currFreeSlot{};
+    uint32_t slot{currFreeSlot++};
+    VkDescriptorImageInfo descriptorImageInfo{
+        .sampler     = m_textureSampler,
+        .imageView   = imageView,
+        .imageLayout = VK_IMAGE_LAYOUT_GENERAL
+    };
+    VkWriteDescriptorSet writeDescriptorSet{
+        .sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .pNext           = nullptr,
+        .dstSet          = m_descriptorSet,
+        .dstBinding      = 0,
+        .dstArrayElement = slot,
+        .descriptorCount = 1,
+        .descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .pImageInfo      = &descriptorImageInfo
+    };
+    vkUpdateDescriptorSets(m_device, 1, &writeDescriptorSet, 0, nullptr);
+
+    // 5. Track for cleanup
+    m_textureImages.push_back(image);
+    m_textureAllocations.push_back(allocation);
+    m_textureImageViews.push_back(imageView);
+    return slot;
 }
 
 void Renderer::createInstance(Window &window) {
@@ -532,8 +659,8 @@ void Renderer::createGraphicsPipeline() {
         .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .pNext                  = nullptr,
         .flags                  = {},
-        .setLayoutCount         = 0,
-        .pSetLayouts            = nullptr,
+        .setLayoutCount         = 1,
+        .pSetLayouts            = &m_descriptorSetLayout,
         .pushConstantRangeCount = 1,
         .pPushConstantRanges    = &pushConstantRange
     };
@@ -660,7 +787,8 @@ void Renderer::createBuffer(VkBuffer &buffer, VkDeviceSize size, VkBufferUsageFl
     checkResult(vmaCreateBuffer(m_allocator, &bufferCreateInfo, &allocationCreateInfo, &buffer, &allocation, &allocationInfo), "Error: failed to create buffer");
 }
 
-void Renderer::createDescriptorSets() {
+void Renderer::createDescriptorSet() {
+    // 1. Create descriptor set layout
     VkDescriptorSetLayoutBinding textureBinding{
         .binding            = 0,
         .descriptorType     = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -669,6 +797,76 @@ void Renderer::createDescriptorSets() {
         .pImmutableSamplers = nullptr
     };
 
+    VkDescriptorBindingFlags bindingFlags{VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT};
+    VkDescriptorSetLayoutBindingFlagsCreateInfo bindingFlagsCreateInfo{
+        .sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
+        .pNext         = nullptr,
+        .bindingCount  = 1,
+        .pBindingFlags = &bindingFlags
+    };
+
+    VkDescriptorSetLayoutCreateInfo layoutCreateInfo{
+        .sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .pNext        = &bindingFlagsCreateInfo,
+        .flags        = {},
+        .bindingCount = 1,
+        .pBindings    = &textureBinding
+    };
+
+    checkResult(vkCreateDescriptorSetLayout(m_device, &layoutCreateInfo, nullptr, &m_descriptorSetLayout), "Error: failed to create descriptor set layout");
+
+    // 2. Create descriptor pool
+    VkDescriptorPoolSize poolSize{
+        .type            = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .descriptorCount = Config::maxBindlessTextures
+    };
+
+    VkDescriptorPoolCreateInfo poolCreateInfo{
+        .sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .pNext         = nullptr,
+        .flags         = {},
+        .maxSets       = 1,
+        .poolSizeCount = 1,
+        .pPoolSizes    = &poolSize
+    };
+
+    checkResult(vkCreateDescriptorPool(m_device, &poolCreateInfo, nullptr, &m_descriptorPool), "Error: failed to create descriptor pool");
+
+    // 3. Create our descriptor set
+    VkDescriptorSetAllocateInfo allocateInfo{
+        .sType          = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .pNext          = nullptr,
+        .descriptorPool = m_descriptorPool,
+        .descriptorSetCount = 1,
+        .pSetLayouts        = &m_descriptorSetLayout
+    };
+
+    checkResult(vkAllocateDescriptorSets(m_device, &allocateInfo, &m_descriptorSet), "Error: failed to allocate descriptor set");
+
+}
+
+void Renderer::createTextureSampler() {
+    VkSamplerCreateInfo samplerCreateInfo{
+        .sType                   = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .pNext                   = nullptr,
+        .flags                   = {},
+        .magFilter               = VK_FILTER_LINEAR,
+        .minFilter               = VK_FILTER_LINEAR,
+        .mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+        .addressModeU            = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeV            = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeW            = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .mipLodBias              = 0.0f,
+        .anisotropyEnable        = VK_FALSE,
+        .maxAnisotropy           = 1.0f,
+        .compareEnable           = VK_FALSE,
+        .compareOp               = VK_COMPARE_OP_ALWAYS,
+        .minLod                  = 0.0f,
+        .maxLod                  = 0.0f,  // no mipmaps
+        .borderColor             = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+        .unnormalizedCoordinates = VK_FALSE
+    };
+    checkResult(vkCreateSampler(m_device, &samplerCreateInfo, nullptr, &m_textureSampler), "Error: failed to create texture sampler");
 }
 
 void Renderer::drawFrame(Window &window) {
@@ -1028,6 +1226,8 @@ void Renderer::cleanup() {
     vkDestroyCommandPool(m_device, m_commandPool, nullptr);
     vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
     vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
+    vkDestroyDescriptorPool(m_device, m_descriptorPool, nullptr);
+    vkDestroyDescriptorSetLayout(m_device, m_descriptorSetLayout, nullptr);
     swapchainCleanup();
     vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
     vmaDestroyAllocator(m_allocator);
