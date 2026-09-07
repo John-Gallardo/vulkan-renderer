@@ -10,6 +10,7 @@ void App::run() {
     m_renderer.initVulkan(m_window);
     m_modelLoader.loadModel(m_vertices, m_indices, m_materials, m_renderer);
     m_renderer.uploadModel(m_vertices, m_indices);
+    m_renderer.uploadMaterials(m_materials);
     mainLoop();
     cleanup();
 }
