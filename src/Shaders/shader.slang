@@ -35,7 +35,7 @@ PushConstants pushConstants;
 
 const static uint g_invalidTextureIndex = 0xFFFFFFFF;
 const static float g_ambientStrength = 0.1;
-const static float3 g_lightColor = {0.5, 0.5, 0.5};
+const static float3 g_lightColor = {1.0, 1.0, 1.0};
 const static float4 g_lightPos = {0.0, 1000.0, 10.0, 1.0};
 const static float g_shininess = 32.0;
 const static float g_specularStrength = 0.5;
