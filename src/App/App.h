@@ -3,6 +3,7 @@
 #include "Window/Window.h"
 #include "Input/Input.h"
 #include "ModelLoader/ModelLoader.h"
+#include "Material.h"
 #include "Vertex.h"
 #include <cstdint>
 #include <vector>
@@ -18,6 +19,7 @@ private:
     ModelLoader           m_modelLoader{};
     std::vector<Vertex>   m_vertices{};
     std::vector<uint32_t> m_indices{};
+    std::vector<Material> m_materials{};
     float                 m_deltaTime{0.0f};
     float                 m_lastFrame{0.0f};
 

@@ -6,6 +6,7 @@
 #include "vk_mem_alloc.h"
 #include "stb_image.h"
 #include "Vertex.h"
+#include "Material.h"
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/ext/matrix_clip_space.hpp>
@@ -35,6 +36,7 @@ void Renderer::initVulkan(Window &window) {
     createImageViews();
     createDepthResources();
     createDescriptorSet();
+    createTextureSampler();
     createGraphicsPipeline();
     createCommandPool();
     createCommandBuffers();
@@ -72,9 +74,9 @@ void Renderer::uploadModel(std::vector<Vertex> &vertices, std::vector<uint32_t> 
     m_indexCount = static_cast<uint32_t>(indices.size());
 }
 
-uint32_t Renderer::uploadTexture(const char *path, VkFormat format) {
+uint32_t Renderer::uploadTexture(const std::string &path, VkFormat format) {
     int width{}, height{}, channels{};
-    stbi_uc *pixels{stbi_load(path, &width, &height, &channels, STBI_rgb_alpha)};
+    stbi_uc *pixels{stbi_load(path.c_str(), &width, &height, &channels, STBI_rgb_alpha)};
     if (pixels == nullptr) {
         throw std::runtime_error(std::format("Error: failed to load texture: {}", path));
     }
@@ -195,6 +197,25 @@ uint32_t Renderer::uploadTexture(const char *path, VkFormat format) {
     m_textureAllocations.push_back(allocation);
     m_textureImageViews.push_back(imageView);
     return slot;
+}
+
+void Renderer::uploadMaterials(std::vector<Material> &materials) {
+    createBuffer(
+        m_materialBuffer,
+        materials.size() * sizeof(Material),
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        m_materialAllocation,
+        m_materialAllocationInfo
+    );
+
+    memcpy(m_materialAllocationInfo.pMappedData, materials.data(), materials.size() *sizeof(Material));
+    
+    VkBufferDeviceAddressInfo bufferDeviceAddressInfo{
+        .sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+        .pNext  = nullptr,
+        .buffer = m_materialBuffer
+    };
+    m_materialBufferAddress = vkGetBufferDeviceAddress(m_device, &bufferDeviceAddressInfo);
 }
 
 void Renderer::createInstance(Window &window) {
@@ -1219,6 +1240,9 @@ void Renderer::checkResult(VkResult result, const char *errorMessage) const {
 
 void Renderer::cleanup() {
     vkDeviceWaitIdle(m_device);
+    for (VkImageView imageView : m_textureImageViews) {
+        vkDestroyImageView(m_device, imageView, nullptr);
+    }
     vkDestroyImageView(m_device, m_depthImageView, nullptr);
     vmaDestroyImage(m_allocator, m_depthImage, m_depthImageAllocation);
     vmaCleanup();
@@ -1256,4 +1280,8 @@ void Renderer::syncObjectCleanup() {
 void Renderer::vmaCleanup() {
     vmaDestroyBuffer(m_allocator, m_vertexBuffer, m_vertexAllocation);
     vmaDestroyBuffer(m_allocator, m_indexBuffer, m_indexAllocation);
+
+    for (int i : std::views::iota(0uz, m_textureImages.size())) {
+        vmaDestroyImage(m_allocator, m_textureImages[i], m_textureAllocations[i]);
+    }
 }

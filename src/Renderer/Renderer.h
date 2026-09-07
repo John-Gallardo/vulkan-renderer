@@ -7,13 +7,15 @@
 #include <string>
 class Window;
 struct Vertex;
+struct Material;
 
 class Renderer {
 public:
     void initVulkan(Window &window);
     void drawFrame(Window &window);  // for potential swapchain recreation
     void uploadModel(std::vector<Vertex> &vertices, std::vector<uint32_t> &indices);
-    uint32_t uploadTexture(const char *path, VkFormat format);
+    uint32_t uploadTexture(const std::string &path, VkFormat format);
+    void uploadMaterials(std::vector<Material> &materials);
     // NOTE: these two probably should be in the Input class but I am too lazy at this point
     void processCameraMovement(Window &window, float deltaTime);  
     void processMouseMovement(float xPos, float yPos);
@@ -63,8 +65,11 @@ private:
     std::vector<VkImage>         m_textureImages           {};
     std::vector<VmaAllocation>   m_textureAllocations      {};
     std::vector<VkImageView>     m_textureImageViews       {};
-
-
+    // materials
+    VkBuffer                     m_materialBuffer          {VK_NULL_HANDLE};
+    VmaAllocation                m_materialAllocation      {VK_NULL_HANDLE};
+    VmaAllocationInfo            m_materialAllocationInfo  {};
+    VkDeviceAddress              m_materialBufferAddress   {};
     // camera
     glm::vec3                    m_cameraPos               {0.0f, 0.0f, 3.0f};
     glm::vec3                    m_cameraFront             {0.0f, 0.0f, -1.0f};
