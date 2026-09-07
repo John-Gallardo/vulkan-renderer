@@ -64,10 +64,17 @@ VertexOutput vertexMain(uint vertexIndex: SV_VertexID) {
 float4 fragmentMain(VertexOutput vertex) : SV_Target {
     Material material = pushConstants.materialBuffer[vertex.materialIndex];
 
-    float3 albedo = float3(1.0, 1.0, 1.0);
+    float4 baseColor = float4(1.0, 1.0, 1.0, 1.0);
     if (material.albedoIndex != g_invalidTextureIndex) {
-        albedo = g_textures[NonUniformResourceIndex(material.albedoIndex)].Sample(vertex.texCoord).rgb;
+        baseColor = g_textures[NonUniformResourceIndex(material.albedoIndex)].Sample(vertex.texCoord);
     }
+
+    // hair transparency
+    if (baseColor.a < 0.1) {
+        discard;
+    }
+
+    float3 albedo = baseColor.rgb;
 
     // Blinn-Phong lighting
     float3 normal = normalize(vertex.normal);

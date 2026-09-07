@@ -25,8 +25,9 @@ void ModelLoader::loadModel(std::vector<Vertex> &vertices, std::vector<uint32_t>
     const char *path{PROJECT_ROOT_DIR "models/cloud_strife/scene.gltf"};
     const aiScene *scene{importer.ReadFile(
         path,
-        aiProcess_Triangulate |          // make sure all faces are triangles
-        aiProcess_JoinIdenticalVertices  // merge duplicate vertices
+        aiProcess_Triangulate |            // make sure all faces are triangles
+        aiProcess_JoinIdenticalVertices |  // merge duplicate vertices
+        aiProcess_FlipUVs
     )};
 
     if (scene == nullptr || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
