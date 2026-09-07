@@ -11,7 +11,7 @@
 - Depth testing and back-face culling
 - Bindless texture access using descriptor indexing
 - Buffer device addresses passed in via push constants
-- Alpha-tested transparency on the shader side for textured materials (eg. Cloud's hair)
+- Alpha testing for transparency on the shader side for textured materials (eg. Cloud's hair)
 - Direct texture uploads using Vulkan host image copy
 - Synchronization using semaphores, fences, and pipeline barriers
 
